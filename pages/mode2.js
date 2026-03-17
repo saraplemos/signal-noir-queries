@@ -1,0 +1,504 @@
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/router";
+
+const C = {
+  navy: "#0D1B2A", navy2: "#142233", navy3: "#1C2E42",
+  teal: "#0D9488", tealD: "#0A7A70", tealL: "#5EEAD4",
+  gold: "#C9A84C", white: "#FFFFFF", grey: "#64748B", greyL: "#94A3B8",
+  green: "#10B981", red: "#EF4444", purple: "#A78BFA",
+};
+
+const PLATFORMS = ["Claude", "ChatGPT", "Perplexity", "Gemini"];
+const CATEGORIES = ["destination", "experience", "planning"];
+const CAT_LABELS = { destination: "Destination", experience: "Experience", planning: "Planning" };
+const CAT_COLORS = { destination: C.teal, experience: C.gold, planning: C.purple };
+
+// Personas from shared lib
+import { PERSONAS } from "../lib/personas";
+
+const DEFAULT_PUBLICATIONS = [
+  "Condé Nast Traveller","OutThere","Elite Traveler","BA High Life",
+  "National Geographic Traveller","Centurion & Departures","The Times",
+  "The Telegraph","The Financial Times","FT How to Spend It","Country Life",
+  "Stylist","Elle","Robb Report","Country & Town House","Tatler","Wallpaper*",
+  "Vogue","HELLO! Luxe","Harper's Bazaar","Times Lux Magazine","House & Garden",
+  "Livingetc","Spear's","Forbes","Good Housekeeping","Marie Claire","Aspire","TTG Luxury",
+];
+
+const DEFAULT_QUERIES = {
+  destination: [
+    { id:"d1",  text:"Luxury hotel Dubai", active:true },
+    { id:"d2",  text:"Desert resort Dubai", active:true },
+    { id:"d3",  text:"Ski chalet Courchevel", active:true },
+    { id:"d4",  text:"Luxury ski resort Verbier", active:true },
+    { id:"d5",  text:"Luxury resort Maldives", active:true },
+    { id:"d6",  text:"Private island Maldives", active:true },
+    { id:"d7",  text:"Private island Caribbean", active:true },
+    { id:"d8",  text:"Luxury hotel Lake Como", active:true },
+    { id:"d9",  text:"Luxury hotel Amalfi Coast", active:true },
+    { id:"d10", text:"Boutique hotel French Riviera", active:true },
+    { id:"d11", text:"Luxury hotel Kyoto", active:true },
+    { id:"d12", text:"Luxury safari lodge Tanzania", active:true },
+  ],
+  experience: [
+    { id:"e1",  text:"Private museum tour Paris", active:true },
+    { id:"e2",  text:"Private Vatican tour", active:true },
+    { id:"e3",  text:"Private cooking class with local chef", active:true },
+    { id:"e4",  text:"Wellness retreat", active:true },
+    { id:"e5",  text:"Medical wellness program", active:true },
+    { id:"e6",  text:"Antarctic expedition cruise", active:true },
+    { id:"e7",  text:"Northern lights private charter", active:true },
+    { id:"e8",  text:"Heli-skiing British Columbia", active:true },
+    { id:"e9",  text:"Venice Simplon Orient Express", active:true },
+    { id:"e10", text:"Private safari lodge Botswana", active:true },
+  ],
+  planning: [
+    { id:"p1", text:"Villa with chef and staff Tuscany", active:true },
+    { id:"p2", text:"Ski chalet with catering Verbier", active:true },
+    { id:"p3", text:"Yacht charter with crew Mediterranean", active:true },
+    { id:"p4", text:"Private island resort with butler Maldives", active:true },
+    { id:"p5", text:"Multi-generational villa rental", active:true },
+    { id:"p6", text:"Family estate rental", active:true },
+    { id:"p7", text:"Bespoke tour operators Antarctica", active:true },
+    { id:"p8", text:"Private jet charter London to New York", active:true },
+  ],
+};
+
+// styles
+const btn = (bg=C.teal, col=C.white, extra={}) => ({ background:bg, color:col, border:"none", borderRadius:6, padding:"9px 20px", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Calibri, sans-serif", transition:"opacity 0.15s", ...extra });
+const card = (extra={}) => ({ background:C.navy2, border:`1px solid ${C.navy3}`, borderRadius:10, padding:20, ...extra });
+const inp = (extra={}) => ({ background:C.navy3, color:C.white, border:`1px solid #1E3A52`, borderRadius:6, padding:"9px 12px", fontSize:13, fontFamily:"Calibri, sans-serif", outline:"none", ...extra });
+const lbl = { display:"block", fontSize:11, color:C.greyL, fontFamily:"Calibri, sans-serif", textTransform:"uppercase", letterSpacing:0.5, marginBottom:6, fontWeight:600 };
+const tag = (color) => ({ display:"inline-block", background:`${color}22`, color, border:`1px solid ${color}44`, borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600, fontFamily:"Calibri, sans-serif" });
+
+function allActive(queries) {
+  return CATEGORIES.flatMap(cat => queries[cat].filter(q => q.active));
+}
+
+export default function Mode2() {
+  const router = useRouter();
+  const [tester, setTester] = useState("");
+  const [step, setStep] = useState(0);
+  const [config, setConfig] = useState({ agency:"", vertical:"Luxury Travel", notes:"" });
+  const [publications, setPublications] = useState([...DEFAULT_PUBLICATIONS]);
+  const [pubInput, setPubInput] = useState(DEFAULT_PUBLICATIONS.join("\n"));
+  const [queries, setQueries] = useState(DEFAULT_QUERIES);
+  const [activeCategory, setActiveCategory] = useState("destination");
+  const [results, setResults] = useState({});
+  const [running, setRunning] = useState(false);
+  const [currentPlatform, setCurrentPlatform] = useState("");
+  const [progress, setProgress] = useState({ done:0, total:4 });
+  const [sessionId] = useState(() => `SN2-${Date.now().toString(36).toUpperCase()}`);
+  const [sheetTab, setSheetTab] = useState("");
+  const [editQueryId, setEditQueryId] = useState(null);
+  const [selectedPlatforms, setSelectedPlatforms] = useState(["Claude","ChatGPT","Perplexity","Gemini"]);
+
+  useEffect(() => {
+    fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.name) setTester(d.name);
+      else router.push("/");
+    });
+  }, []);
+
+  async function logout() {
+    await fetch("/api/auth/logout");
+    router.push("/");
+  }
+
+  const activeQ = allActive(queries);
+
+  function parsePubInput(val) {
+    return val.split("\n").map(s => s.trim()).filter(Boolean);
+  }
+
+  async function runAllPlatforms() {
+    setStep(3);
+    setRunning(true);
+    const pubs = parsePubInput(pubInput);
+    setPublications(pubs);
+    const queryTexts = activeQ.map(q => q.text);
+    const newResults = {};
+    // progress set inside loop above
+
+    const activePlats = selectedPlatforms.length ? selectedPlatforms : PLATFORMS;
+    setProgress({ done:0, total: activePlats.length });
+    for (let i = 0; i < activePlats.length; i++) {
+      const platform = activePlats[i];
+      setCurrentPlatform(platform);
+      try {
+        const res = await fetch("/api/query/mode2", {
+          method: "POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({ platform, queries: queryTexts, publications: pubs }),
+        });
+        const data = await res.json();
+        newResults[platform] = data;
+      } catch(e) {
+        newResults[platform] = { error: e.message, counts:{}, queryResults:[] };
+      }
+      setResults({...newResults});
+      setProgress({ done: i+1, total: PLATFORMS.length });
+    }
+
+    setRunning(false);
+    setCurrentPlatform("");
+
+    // Log to sheets
+    try {
+      const res = await fetch("/api/sheets/logmode2", {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+          agency: config.agency,
+          sessionId,
+          publications: pubs,
+          results: newResults,
+          platforms: PLATFORMS,
+          runDate: new Date().toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (data.tabName) setSheetTab(data.tabName);
+    } catch(e) {
+      console.error("Sheet log failed:", e);
+    }
+
+    setStep(4);
+  }
+
+  function exportCSV() {
+    const pubs = parsePubInput(pubInput);
+    const rows = [["Publication", ...PLATFORMS.map(p=>`${p} Citations`), "Total", "Citation Rate %"]];
+    pubs.forEach(pub => {
+      const counts = PLATFORMS.map(p => results[p]?.counts?.[pub] ?? 0);
+      const total = counts.reduce((a,b)=>a+b,0);
+      const rate = `${Math.round(total/(PLATFORMS.length*activeQ.length)*100)}%`;
+      rows.push([pub, ...counts, total, rate]);
+    });
+    const csv = rows.map(r => r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], {type:"text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=`signal-noir-publication-authority-${config.agency.replace(/\s+/g,"-")}.csv`;
+    a.click();
+  }
+
+  const steps = ["Project Setup","Publications","Queries","Running","Results"];
+
+  return (
+    <div style={{ background:C.navy, minHeight:"100vh" }}>
+      {/* Header */}
+      <div style={{ background:C.navy2, borderBottom:`1px solid ${C.navy3}`, padding:"0 28px", display:"flex", alignItems:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 0", flex:1 }}>
+          <div style={{ width:8, height:8, borderRadius:"50%", background:C.teal, boxShadow:`0 0 8px ${C.teal}` }}/>
+          <span style={{ fontSize:15, fontWeight:700, letterSpacing:2 }}>SIGNAL NOIR™</span>
+          <span style={{ ...tag(C.purple), fontSize:10, marginLeft:4 }}>PUBLICATION AUTHORITY</span>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <button onClick={() => router.push("/dashboard")} style={btn(C.navy3, C.greyL, { border:`1px solid ${C.navy3}`, fontSize:12, padding:"6px 14px" })}>
+            ← Property Mode
+          </button>
+          {tester && <span style={tag(C.teal)}>🧑 {tester}</span>}
+          <button onClick={logout} style={btn(C.navy3, C.greyL, { fontSize:12, padding:"6px 14px", border:`1px solid ${C.navy3}` })}>Sign out</button>
+        </div>
+      </div>
+
+      {/* Step tabs */}
+      <div style={{ background:C.navy2, borderBottom:`1px solid ${C.navy3}`, padding:"0 28px", display:"flex" }}>
+        {steps.map((label,i) => (
+          <button key={i} onClick={() => i < step && setStep(i)}
+            style={{ background:"none", border:"none", borderBottom: step===i ? `2px solid ${C.purple}` : "2px solid transparent", color: step===i ? C.purple : i<step ? C.greyL : C.grey, padding:"12px 20px", fontSize:12, fontFamily:"Calibri,sans-serif", fontWeight:600, cursor: i<step?"pointer":"default", letterSpacing:0.5 }}>
+            {i+1}. {label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding:"28px", maxWidth:1100, margin:"0 auto" }}>
+
+        {/* STEP 0 — Setup */}
+        {step === 0 && (
+          <div>
+            <h2 style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>Publication Authority Setup</h2>
+            <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:14, marginBottom:24 }}>
+              Measure which publications AI platforms cite when answering luxury travel queries — for a specific agency and their target media.
+            </p>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, maxWidth:680 }}>
+              <div>
+                <label style={lbl}>Agency / Client Name</label>
+                <input style={{ ...inp(), width:"100%", boxSizing:"border-box" }}
+                  placeholder="e.g. Spotlight Communications"
+                  value={config.agency} onChange={e => setConfig(p=>({...p,agency:e.target.value}))} />
+                <div style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif", marginTop:5 }}>Used to name the Google Sheet tab</div>
+              </div>
+              <div>
+                <label style={lbl}>Vertical</label>
+                <input style={{ ...inp(), width:"100%", boxSizing:"border-box" }}
+                  placeholder="e.g. Luxury Travel, Superyacht, Fine Dining"
+                  value={config.vertical} onChange={e => setConfig(p=>({...p,vertical:e.target.value}))} />
+              </div>
+            </div>
+            <div style={{ marginTop:20, maxWidth:680 }}>
+              <label style={lbl}>Notes (optional)</label>
+              <textarea style={{ ...inp(), width:"100%", boxSizing:"border-box", height:70, resize:"vertical" }}
+                placeholder="e.g. Spotlight Whitepaper 2026 — 29 target publications, luxury travel vertical"
+                value={config.notes} onChange={e => setConfig(p=>({...p,notes:e.target.value}))} />
+            </div>
+            {/* Platform selector */}
+            <div style={{ marginTop:24, maxWidth:680 }}>
+              <label style={{ display:"block", fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif", textTransform:"uppercase", letterSpacing:0.5, marginBottom:10, fontWeight:600 }}>Platforms to Test</label>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {["Claude","ChatGPT","Perplexity","Gemini"].map(p => {
+                  const on = selectedPlatforms.includes(p);
+                  const cols = { Claude:C.teal, ChatGPT:C.green, Perplexity:"#F97316", Gemini:C.gold };
+                  const col = cols[p];
+                  return (
+                    <div key={p} onClick={() => setSelectedPlatforms(prev => on && prev.length>1 ? prev.filter(x=>x!==p) : on ? prev : [...prev,p])}
+                      style={{ padding:"8px 18px", borderRadius:6, cursor:"pointer", border:`1px solid ${on?col:C.navy3}`, background:on?`${col}22`:"none", color:on?col:C.grey, fontSize:13, fontFamily:"Calibri,sans-serif", fontWeight:600, transition:"all 0.15s", display:"flex", alignItems:"center", gap:6 }}>
+                      {on && <span>✓</span>}{p}
+                      {p==="Perplexity" && <span style={{ fontSize:10, color:C.grey }}>†</span>}
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedPlatforms.includes("Perplexity") && (
+                <div style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif", marginTop:8 }}>
+                  † Perplexity index volatility documented — results may vary significantly between sessions
+                </div>
+              )}
+            </div>
+            <button style={{ ...btn(C.teal, C.white, {marginTop:28}), opacity: config.agency ? 1 : 0.4 }}
+              disabled={!config.agency} onClick={() => setStep(1)}>
+              Continue to Publications →
+            </button>
+          </div>
+        )}
+
+        {/* STEP 1 — Publications */}
+        {step === 1 && (
+          <div>
+            <h2 style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>Target Publications</h2>
+            <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:14, marginBottom:20 }}>
+              Enter one publication per line. The tool will scan every AI response for mentions of these titles.
+              Pre-loaded with the Spotlight whitepaper publication list — edit as needed for each client.
+            </p>
+            <div style={{ maxWidth:680 }}>
+              <label style={lbl}>Publications (one per line)</label>
+              <textarea style={{ ...inp(), width:"100%", boxSizing:"border-box", height:400, resize:"vertical", lineHeight:1.8, fontSize:12 }}
+                value={pubInput} onChange={e => setPubInput(e.target.value)} />
+              <div style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif", marginTop:8 }}>
+                {parsePubInput(pubInput).length} publications · Tool will scan all AI responses for these names
+              </div>
+            </div>
+            <button style={{ ...btn(C.teal, C.white, {marginTop:24}), opacity: parsePubInput(pubInput).length ? 1 : 0.4 }}
+              disabled={!parsePubInput(pubInput).length} onClick={() => setStep(2)}>
+              Continue to Queries ({parsePubInput(pubInput).length} publications) →
+            </button>
+          </div>
+        )}
+
+        {/* STEP 2 — Queries */}
+        {step === 2 && (
+          <div>
+            <h2 style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>Edit Queries</h2>
+            <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:14, marginBottom:20 }}>
+              Pre-loaded with the 30 Spotlight whitepaper queries. Toggle, edit, or add for each client vertical.
+            </p>
+            <div style={{ display:"flex", gap:0, marginBottom:20 }}>
+              {CATEGORIES.map(cat => (
+                <button key={cat} onClick={() => setActiveCategory(cat)} style={{
+                  background: activeCategory===cat ? `${CAT_COLORS[cat]}22` : "none",
+                  border: activeCategory===cat ? `1px solid ${CAT_COLORS[cat]}66` : `1px solid ${C.navy3}`,
+                  color: activeCategory===cat ? CAT_COLORS[cat] : C.greyL,
+                  padding:"8px 20px", fontSize:12, fontFamily:"Calibri,sans-serif", fontWeight:600, cursor:"pointer", letterSpacing:0.5,
+                  borderRadius: cat==="destination" ? "6px 0 0 6px" : cat==="planning" ? "0 6px 6px 0" : "0",
+                }}>
+                  {CAT_LABELS[cat].toUpperCase()} ({queries[cat].filter(q=>q.active).length})
+                </button>
+              ))}
+            </div>
+            <div style={{ maxWidth:680 }}>
+              {queries[activeCategory].map((q,i) => (
+                <div key={q.id} style={{ ...card({marginBottom:8, display:"flex", alignItems:"center", gap:12}), border:`1px solid ${q.active ? CAT_COLORS[activeCategory]+"44" : C.navy3}`, opacity: q.active?1:0.5 }}>
+                  <div onClick={() => setQueries(prev => ({...prev, [activeCategory]: prev[activeCategory].map((qq,j) => j===i ? {...qq,active:!qq.active} : qq)}))}
+                    style={{ width:20, height:20, borderRadius:4, border:`2px solid ${q.active?CAT_COLORS[activeCategory]:C.grey}`, background:q.active?CAT_COLORS[activeCategory]:"none", cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    {q.active && <span style={{ fontSize:12, color:C.white, fontWeight:700 }}>✓</span>}
+                  </div>
+                  {editQueryId === q.id ? (
+                    <input autoFocus style={{ ...inp(), flex:1 }} value={q.text}
+                      onChange={e => setQueries(prev => ({...prev, [activeCategory]: prev[activeCategory].map((qq,j) => j===i ? {...qq,text:e.target.value} : qq)}))}
+                      onBlur={() => setEditQueryId(null)} onKeyDown={e => e.key==="Enter" && setEditQueryId(null)} />
+                  ) : (
+                    <span style={{ flex:1, fontSize:13, fontFamily:"Calibri,sans-serif" }}>{q.text}</span>
+                  )}
+                  <button onClick={() => setEditQueryId(q.id)} style={{ background:"none", border:"none", color:C.grey, cursor:"pointer", fontSize:14 }}>✏️</button>
+                </div>
+              ))}
+              <button onClick={() => {
+                const id = activeCategory[0]+Date.now();
+                setQueries(prev => ({...prev, [activeCategory]: [...prev[activeCategory], {id, text:"", active:true}]}));
+                setTimeout(() => setEditQueryId(id), 50);
+              }} style={{ ...btn("none", C.greyL, {border:`1px dashed ${C.grey}`, marginTop:8}) }}>+ Add query</button>
+            </div>
+            <div style={{ marginTop:28, display:"flex", alignItems:"center", gap:14 }}>
+              <button style={btn(C.teal)} onClick={runAllPlatforms}>
+                Run {selectedPlatforms.length} Platform{selectedPlatforms.length!==1?'s':''} ({activeQ.length} queries each) →
+              </button>
+              <span style={{ fontSize:12, color:C.grey, fontFamily:"Calibri,sans-serif" }}>
+                All 4 platforms run automatically — no manual input needed
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3 — Running */}
+        {step === 3 && (
+          <div>
+            <h2 style={{ fontSize:22, fontWeight:700, marginBottom:8 }}>Running Publication Authority Tests</h2>
+            <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:13, marginBottom:28 }}>
+              Sending all {activeQ.length} queries to each platform in a single batch call. Each platform returns a full source table which is scanned for your {parsePubInput(pubInput).length} target publications.
+            </p>
+            <div style={{ display:"flex", gap:12, marginBottom:32, flexWrap:"wrap" }}>
+              {PLATFORMS.map(p => {
+                const done = !!results[p];
+                const active = currentPlatform === p;
+                return (
+                  <div key={p} style={{ ...card({padding:"16px 24px", minWidth:160, textAlign:"center"}), border:`1px solid ${done?C.teal:active?C.gold:C.navy3}`, background: done?`${C.teal}18`:active?`${C.gold}18`:C.navy2 }}>
+                    {active ? (
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:8 }}>
+                        <div style={{ width:14, height:14, border:`2px solid ${C.gold}`, borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/>
+                        <span style={{ fontSize:12, color:C.gold, fontFamily:"Calibri,sans-serif" }}>Running…</span>
+                      </div>
+                    ) : done ? (
+                      <div style={{ fontSize:18, marginBottom:6 }}>✅</div>
+                    ) : (
+                      <div style={{ fontSize:18, marginBottom:6, opacity:0.3 }}>⏳</div>
+                    )}
+                    <div style={{ fontSize:14, fontWeight:700, color: done?C.tealL:active?C.gold:C.grey }}>{p}</div>
+                    {done && results[p]?.counts && (
+                      <div style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif", marginTop:4 }}>
+                        {Object.values(results[p].counts).filter(v=>v>0).length} pubs cited
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ width:"100%", maxWidth:400, height:6, background:C.navy3, borderRadius:3 }}>
+              <div style={{ width:`${progress.done/progress.total*100}%`, height:6, background:C.teal, borderRadius:3, transition:"width 0.4s" }}/>
+            </div>
+            <div style={{ fontSize:12, color:C.grey, fontFamily:"Calibri,sans-serif", marginTop:8 }}>{progress.done}/{progress.total} platforms complete</div>
+          </div>
+        )}
+
+        {/* STEP 4 — Results */}
+        {step === 4 && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
+              <div>
+                <h2 style={{ fontSize:22, fontWeight:700, marginBottom:4 }}>Publication Authority Results</h2>
+                <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:13 }}>
+                  Signal Noir™ · {config.agency} · {activeQ.length} queries · {parsePubInput(pubInput).length} publications · Session {sessionId}
+                </p>
+                {sheetTab && (
+                  <div style={{ marginTop:6, fontSize:12, fontFamily:"Calibri,sans-serif", color:C.teal }}>
+                    ✓ Written to Google Sheet tab: "{sheetTab}"
+                  </div>
+                )}
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <button style={btn(C.gold, C.navy)} onClick={exportCSV}>↓ Export CSV</button>
+                <button style={btn(C.navy3, C.greyL, {border:`1px solid ${C.navy3}`})} onClick={() => { setStep(0); setResults({}); }}>New Session</button>
+              </div>
+            </div>
+
+            {/* Publication scores table */}
+            <div style={{ ...card({marginBottom:24}), overflowX:"auto" }}>
+              <table style={{ borderCollapse:"collapse", width:"100%", fontSize:12, fontFamily:"Calibri,sans-serif" }}>
+                <thead>
+                  <tr style={{ borderBottom:`2px solid ${C.navy3}` }}>
+                    <th style={{ textAlign:"left", padding:"10px 14px", color:C.greyL, fontWeight:600, minWidth:200 }}>Publication</th>
+                    {PLATFORMS.map(p => (
+                      <th key={p} style={{ padding:"10px 14px", color:C.greyL, fontWeight:600, textAlign:"center", minWidth:120 }}>
+                        {p}<br/>
+                        <span style={{ fontSize:10, fontWeight:400 }}>(0–{activeQ.length})</span>
+                      </th>
+                    ))}
+                    <th style={{ padding:"10px 14px", color:C.greyL, fontWeight:600, textAlign:"center" }}>Total<br/><span style={{ fontSize:10, fontWeight:400 }}>(0–{activeQ.length*4})</span></th>
+                    <th style={{ padding:"10px 14px", color:C.greyL, fontWeight:600, textAlign:"center" }}>Citation<br/>Rate %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsePubInput(pubInput).map(pub => {
+                    const counts = PLATFORMS.map(p => results[p]?.counts?.[pub] ?? 0);
+                    const total = counts.reduce((a,b)=>a+b,0);
+                    const maxTotal = PLATFORMS.length * activeQ.length;
+                    const rate = maxTotal > 0 ? Math.round(total/maxTotal*100) : 0;
+                    const hasAnyCitation = total > 0;
+                    return (
+                      <tr key={pub} style={{ borderTop:`1px solid ${C.navy3}`, background: hasAnyCitation ? `${C.teal}08` : "none" }}>
+                        <td style={{ padding:"9px 14px", color: hasAnyCitation ? C.white : C.greyL, fontWeight: hasAnyCitation ? 600 : 400 }}>{pub}</td>
+                        {counts.map((c,i) => (
+                          <td key={i} style={{ padding:"9px 14px", textAlign:"center", color: c>0?C.tealL:C.grey, fontWeight: c>0?700:400 }}>
+                            {c > 0 ? c : "–"}
+                          </td>
+                        ))}
+                        <td style={{ padding:"9px 14px", textAlign:"center", fontWeight:700, color: total>0?C.gold:C.grey }}>{total > 0 ? total : "–"}</td>
+                        <td style={{ padding:"9px 14px", textAlign:"center", fontWeight:700, color: rate>=20?C.green:rate>=10?C.gold:rate>0?C.greyL:C.grey }}>
+                          {rate > 0 ? `${rate}%` : "–"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Platform summaries */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:24 }}>
+              {PLATFORMS.map(p => {
+                const pubs = parsePubInput(pubInput);
+                const totalCitations = pubs.reduce((sum, pub) => sum + (results[p]?.counts?.[pub] || 0), 0);
+                const pubsCited = pubs.filter(pub => (results[p]?.counts?.[pub] || 0) > 0).length;
+                return (
+                  <div key={p} style={{ ...card({textAlign:"center"}) }}>
+                    <div style={{ fontSize:22, fontWeight:700, color:C.teal }}>{totalCitations}</div>
+                    <div style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif" }}>total citations</div>
+                    <div style={{ fontSize:15, fontWeight:700, marginTop:8 }}>{p}</div>
+                    <div style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif", marginTop:4 }}>{pubsCited}/{pubs.length} pubs cited</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Top cited publications highlight */}
+            {(() => {
+              const pubs = parsePubInput(pubInput);
+              const ranked = pubs
+                .map(pub => ({ pub, total: PLATFORMS.reduce((sum,p) => sum+(results[p]?.counts?.[pub]||0),0) }))
+                .filter(x => x.total > 0)
+                .sort((a,b) => b.total-a.total)
+                .slice(0,5);
+              return ranked.length > 0 ? (
+                <div style={{ ...card({marginBottom:24}) }}>
+                  <div style={{ fontSize:13, fontWeight:700, marginBottom:14, color:C.gold }}>⭐ Most Cited Publications</div>
+                  <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                    {ranked.map(({pub, total}, i) => (
+                      <div key={pub} style={{ ...card({padding:"10px 16px"}), border:`1px solid ${C.gold}44`, display:"flex", alignItems:"center", gap:10 }}>
+                        <span style={{ fontSize:18, fontWeight:700, color:C.gold }}>{i+1}</span>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:700 }}>{pub}</div>
+                          <div style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif" }}>{total} citations across all platforms</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes spin { to { transform:rotate(360deg) } }`}</style>
+    </div>
+  );
+}

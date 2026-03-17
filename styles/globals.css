@@ -1,0 +1,21 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  background: #0D1B2A;
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+}
+textarea, input, button, select {
+  font-family: Calibri, 'Segoe UI', sans-serif;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #142233; }
+::-webkit-scrollbar-thumb { background: #1C2E42; border-radius: 3px; }

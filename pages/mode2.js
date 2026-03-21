@@ -92,6 +92,8 @@ export default function Mode2() {
   const [sheetTab, setSheetTab] = useState("");
   const [editQueryId, setEditQueryId] = useState(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState(["Claude","ChatGPT","Perplexity","Gemini"]);
+  const [batchInput, setBatchInput] = useState("");
+  const [showBatch, setShowBatch] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(d => {
@@ -305,7 +307,7 @@ export default function Mode2() {
             </p>
             <div style={{ display:"flex", gap:0, marginBottom:20 }}>
               {CATEGORIES.map(cat => (
-                <button key={cat} onClick={() => setActiveCategory(cat)} style={{
+                <button key={cat} onClick={() => { setActiveCategory(cat); setShowBatch(false); setBatchInput(""); }} style={{
                   background: activeCategory===cat ? `${CAT_COLORS[cat]}22` : "none",
                   border: activeCategory===cat ? `1px solid ${CAT_COLORS[cat]}66` : `1px solid ${C.navy3}`,
                   color: activeCategory===cat ? CAT_COLORS[cat] : C.greyL,
@@ -338,6 +340,37 @@ export default function Mode2() {
                 setQueries(prev => ({...prev, [activeCategory]: [...prev[activeCategory], {id, text:"", active:true}]}));
                 setTimeout(() => setEditQueryId(id), 50);
               }} style={{ ...btn("none", C.greyL, {border:`1px dashed ${C.grey}`, marginTop:8}) }}>+ Add query</button>
+              <button onClick={() => { setShowBatch(b => !b); setBatchInput(""); }} style={{ ...btn("none", C.gold, {border:`1px dashed ${C.gold}66`, marginTop:8, marginLeft:8}) }}>
+                {showBatch ? "✕ Cancel batch" : "+ Add query batch"}
+              </button>
+              {showBatch && (
+                <div style={{ marginTop:12, background:C.navy2, border:`1px solid ${C.gold}44`, borderRadius:8, padding:16 }}>
+                  <p style={{ fontSize:12, color:C.greyL, fontFamily:"Calibri,sans-serif", marginBottom:8 }}>
+                    Paste queries below — one per line. All will be added to <strong style={{color:CAT_COLORS[activeCategory]}}>{CAT_LABELS[activeCategory]}</strong>.
+                  </p>
+                  <textarea
+                    autoFocus
+                    value={batchInput}
+                    onChange={e => setBatchInput(e.target.value)}
+                    placeholder={"Luxury hotel Rome\nBeachfront villa Mykonos\nSki resort Aspen"}
+                    style={{ width:"100%", minHeight:140, background:C.navy3, border:`1px solid ${C.navy3}`, color:C.white, borderRadius:6, padding:"10px 12px", fontSize:13, fontFamily:"Calibri,sans-serif", resize:"vertical", boxSizing:"border-box" }}
+                  />
+                  <button
+                    onClick={() => {
+                      const lines = batchInput.split("\n").map(s => s.trim()).filter(Boolean);
+                      if (!lines.length) return;
+                      const now = Date.now();
+                      const newQ = lines.map((text, i) => ({ id: activeCategory[0]+now+i, text, active:true }));
+                      setQueries(prev => ({...prev, [activeCategory]: [...prev[activeCategory], ...newQ]}));
+                      setBatchInput("");
+                      setShowBatch(false);
+                    }}
+                    style={{ ...btn(C.gold, C.navy, {marginTop:10}) }}
+                  >
+                    Add {batchInput.split("\n").filter(s=>s.trim()).length || 0} quer{batchInput.split("\n").filter(s=>s.trim()).length===1?"y":"ies"}
+                  </button>
+                </div>
+              )}
             </div>
             <div style={{ marginTop:28, display:"flex", alignItems:"center", gap:14 }}>
               <button style={btn(C.teal)} onClick={runAllPlatforms}>

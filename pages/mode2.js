@@ -92,6 +92,7 @@ export default function Mode2() {
   const [sheetTab, setSheetTab] = useState("");
   const [editQueryId, setEditQueryId] = useState(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState(["Claude","ChatGPT","Perplexity","Gemini"]);
+  const [selectedPersonas, setSelectedPersonas] = useState(PERSONAS.map(p => p.id));
   const [batchInput, setBatchInput] = useState("");
   const [showBatch, setShowBatch] = useState(false);
 
@@ -114,39 +115,55 @@ export default function Mode2() {
   }
 
   async function runAllPlatforms() {
-    setStep(3);
+    setStep(4);
     setRunning(true);
     const pubs = parsePubInput(pubInput);
     setPublications(pubs);
     const queryTexts = activeQ.map(q => q.text);
-    const newResults = {};
-    // progress set inside loop above
+    const newResults = {}; // { [personaId]: { [platform]: { counts, queryResults } } }
 
     const activePlats = selectedPlatforms.length ? selectedPlatforms : PLATFORMS;
-    setProgress({ done:0, total: activePlats.length });
-    for (let i = 0; i < activePlats.length; i++) {
-      const platform = activePlats[i];
-      setCurrentPlatform(platform);
-      try {
-        const res = await fetch("/api/query/mode2", {
-          method: "POST",
-          headers: { "Content-Type":"application/json" },
-          body: JSON.stringify({ platform, queries: queryTexts, publications: pubs }),
-        });
-        const data = await res.json();
-        newResults[platform] = data;
-      } catch(e) {
-        newResults[platform] = { error: e.message, counts:{}, queryResults:[] };
+    const activePers = PERSONAS.filter(p => selectedPersonas.includes(p.id));
+    const total = activePers.length * activePlats.length;
+    let done = 0;
+    setProgress({ done:0, total });
+
+    for (const persona of activePers) {
+      newResults[persona.id] = {};
+      for (const platform of activePlats) {
+        setCurrentPlatform(`${persona.icon} ${persona.name} · ${platform}`);
+        try {
+          const res = await fetch("/api/query/mode2", {
+            method: "POST",
+            headers: { "Content-Type":"application/json" },
+            body: JSON.stringify({ platform, queries: queryTexts, publications: pubs, personaPrompt: persona.prompt }),
+          });
+          const data = await res.json();
+          newResults[persona.id][platform] = data;
+        } catch(e) {
+          newResults[persona.id][platform] = { error: e.message, counts:{}, queryResults:[] };
+        }
+        done++;
+        setResults({...newResults});
+        setProgress({ done, total });
       }
-      setResults({...newResults});
-      setProgress({ done: i+1, total: PLATFORMS.length });
     }
 
     setRunning(false);
     setCurrentPlatform("");
 
-    // Log to sheets
+    // Log to sheets (flatten for logging: use first persona or aggregate)
     try {
+      const flatResults = {};
+      activePlats.forEach(platform => {
+        flatResults[platform] = { counts: {}, queryResults: [] };
+        activePers.forEach(persona => {
+          const pData = newResults[persona.id]?.[platform] || {};
+          Object.entries(pData.counts || {}).forEach(([pub, count]) => {
+            flatResults[platform].counts[pub] = (flatResults[platform].counts[pub] || 0) + count;
+          });
+        });
+      });
       const res = await fetch("/api/sheets/logmode2", {
         method: "POST",
         headers: { "Content-Type":"application/json" },
@@ -154,8 +171,8 @@ export default function Mode2() {
           agency: config.agency,
           sessionId,
           publications: pubs,
-          results: newResults,
-          platforms: PLATFORMS,
+          results: flatResults,
+          platforms: activePlats,
           runDate: new Date().toISOString(),
         }),
       });
@@ -165,16 +182,19 @@ export default function Mode2() {
       console.error("Sheet log failed:", e);
     }
 
-    setStep(4);
+    setStep(5);
   }
 
   function exportCSV() {
     const pubs = parsePubInput(pubInput);
-    const rows = [["Publication", ...PLATFORMS.map(p=>`${p} Citations`), "Total", "Citation Rate %"]];
+    const activePers = PERSONAS.filter(p => selectedPersonas.includes(p.id));
+    const activePlats = selectedPlatforms.length ? selectedPlatforms : PLATFORMS;
+    const getCount = (pub, platform) => activePers.reduce((sum, per) => sum + (results[per.id]?.[platform]?.counts?.[pub] || 0), 0);
+    const rows = [["Publication", ...activePlats.map(p=>`${p} Citations`), "Total", "Citation Rate %"]];
     pubs.forEach(pub => {
-      const counts = PLATFORMS.map(p => results[p]?.counts?.[pub] ?? 0);
+      const counts = activePlats.map(p => getCount(pub, p));
       const total = counts.reduce((a,b)=>a+b,0);
-      const rate = `${Math.round(total/(PLATFORMS.length*activeQ.length)*100)}%`;
+      const rate = `${Math.round(total/(activePlats.length*activePers.length*activeQ.length)*100)}%`;
       rows.push([pub, ...counts, total, rate]);
     });
     const csv = rows.map(r => r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -185,7 +205,7 @@ export default function Mode2() {
     a.click();
   }
 
-  const steps = ["Project Setup","Publications","Queries","Running","Results"];
+  const steps = ["Project Setup","Publications","Personas","Queries","Running","Results"];
 
   return (
     <div style={{ background:C.navy, minHeight:"100vh" }}>
@@ -293,13 +313,46 @@ export default function Mode2() {
             </div>
             <button style={{ ...btn(C.teal, C.white, {marginTop:24}), opacity: parsePubInput(pubInput).length ? 1 : 0.4 }}
               disabled={!parsePubInput(pubInput).length} onClick={() => setStep(2)}>
-              Continue to Queries ({parsePubInput(pubInput).length} publications) →
+              Continue to Personas ({parsePubInput(pubInput).length} publications) →
             </button>
           </div>
         )}
 
-        {/* STEP 2 — Queries */}
+        {/* STEP 2 — Personas */}
         {step === 2 && (
+          <div>
+            <h2 style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>Audience Personas</h2>
+            <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:14, marginBottom:24 }}>
+              Each persona simulates a different reader type. Queries run through each selected persona's system prompt.
+            </p>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:14, marginBottom:28 }}>
+              {PERSONAS.map(p => {
+                const on = selectedPersonas.includes(p.id);
+                return (
+                  <div key={p.id} onClick={() => setSelectedPersonas(prev => on ? prev.filter(x=>x!==p.id) : [...prev,p.id])}
+                    style={{ ...card(), cursor:"pointer", border:`1px solid ${on?C.teal:C.navy3}`, background:on?`${C.teal}18`:C.navy2, transition:"all 0.15s", position:"relative" }}>
+                    {on && <div style={{ position:"absolute", top:10, right:12, color:C.teal, fontSize:16, fontWeight:700 }}>✓</div>}
+                    <div style={{ fontSize:24, marginBottom:8 }}>{p.icon}</div>
+                    <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>{p.name}</div>
+                    <div style={{ fontSize:12, color:C.greyL, fontFamily:"Calibri,sans-serif", lineHeight:1.5 }}>{p.desc}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+              <button style={{ ...btn(C.teal), opacity: selectedPersonas.length ? 1 : 0.4 }}
+                disabled={!selectedPersonas.length} onClick={() => setStep(3)}>
+                Continue to Queries ({selectedPersonas.length} persona{selectedPersonas.length!==1?"s":""}) →
+              </button>
+              <span style={{ fontSize:12, color:C.grey, fontFamily:"Calibri,sans-serif" }}>
+                ~{selectedPersonas.length * (selectedPlatforms.length||4) * activeQ.length} total tests
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3 — Queries */}
+        {step === 3 && (
           <div>
             <h2 style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>Edit Queries</h2>
             <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:14, marginBottom:20 }}>
@@ -374,63 +427,65 @@ export default function Mode2() {
             </div>
             <div style={{ marginTop:28, display:"flex", alignItems:"center", gap:14 }}>
               <button style={btn(C.teal)} onClick={runAllPlatforms}>
-                Run {selectedPlatforms.length} Platform{selectedPlatforms.length!==1?'s':''} ({activeQ.length} queries each) →
+                Run {selectedPlatforms.length} Platform{selectedPlatforms.length!==1?'s':''} × {selectedPersonas.length} Persona{selectedPersonas.length!==1?'s':''} ({activeQ.length} queries each) →
               </button>
               <span style={{ fontSize:12, color:C.grey, fontFamily:"Calibri,sans-serif" }}>
-                All 4 platforms run automatically — no manual input needed
+                {selectedPersonas.length * selectedPlatforms.length * activeQ.length} total tests
               </span>
             </div>
           </div>
         )}
 
-        {/* STEP 3 — Running */}
-        {step === 3 && (
+        {/* STEP 4 — Running */}
+        {step === 4 && (
           <div>
             <h2 style={{ fontSize:22, fontWeight:700, marginBottom:8 }}>Running Publication Authority Tests</h2>
             <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:13, marginBottom:28 }}>
-              Sending all {activeQ.length} queries to each platform in a single batch call. Each platform returns a full source table which is scanned for your {parsePubInput(pubInput).length} target publications.
+              Running {activeQ.length} queries across {selectedPersonas.length} persona{selectedPersonas.length!==1?"s":""} × {selectedPlatforms.length} platform{selectedPlatforms.length!==1?"s":""}. Each platform returns a source table scanned for your {parsePubInput(pubInput).length} target publications.
             </p>
-            <div style={{ display:"flex", gap:12, marginBottom:32, flexWrap:"wrap" }}>
-              {PLATFORMS.map(p => {
-                const done = !!results[p];
-                const active = currentPlatform === p;
-                return (
-                  <div key={p} style={{ ...card({padding:"16px 24px", minWidth:160, textAlign:"center"}), border:`1px solid ${done?C.teal:active?C.gold:C.navy3}`, background: done?`${C.teal}18`:active?`${C.gold}18`:C.navy2 }}>
-                    {active ? (
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:8 }}>
-                        <div style={{ width:14, height:14, border:`2px solid ${C.gold}`, borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/>
-                        <span style={{ fontSize:12, color:C.gold, fontFamily:"Calibri,sans-serif" }}>Running…</span>
-                      </div>
-                    ) : done ? (
-                      <div style={{ fontSize:18, marginBottom:6 }}>✅</div>
-                    ) : (
-                      <div style={{ fontSize:18, marginBottom:6, opacity:0.3 }}>⏳</div>
-                    )}
-                    <div style={{ fontSize:14, fontWeight:700, color: done?C.tealL:active?C.gold:C.grey }}>{p}</div>
-                    {done && results[p]?.counts && (
-                      <div style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif", marginTop:4 }}>
-                        {Object.values(results[p].counts).filter(v=>v>0).length} pubs cited
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            {currentPlatform && (
+              <div style={{ ...card({marginBottom:20, padding:"12px 18px", display:"flex", alignItems:"center", gap:12}), border:`1px solid ${C.gold}44` }}>
+                <div style={{ width:14, height:14, border:`2px solid ${C.gold}`, borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite", flexShrink:0 }}/>
+                <span style={{ fontSize:13, color:C.gold, fontFamily:"Calibri,sans-serif" }}>Running: {currentPlatform}</span>
+              </div>
+            )}
+            <div style={{ width:"100%", maxWidth:500, height:8, background:C.navy3, borderRadius:4, marginBottom:10 }}>
+              <div style={{ width:`${progress.total>0?progress.done/progress.total*100:0}%`, height:8, background:C.teal, borderRadius:4, transition:"width 0.4s" }}/>
             </div>
-            <div style={{ width:"100%", maxWidth:400, height:6, background:C.navy3, borderRadius:3 }}>
-              <div style={{ width:`${progress.done/progress.total*100}%`, height:6, background:C.teal, borderRadius:3, transition:"width 0.4s" }}/>
+            <div style={{ fontSize:12, color:C.grey, fontFamily:"Calibri,sans-serif", marginBottom:24 }}>{progress.done}/{progress.total} complete</div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {PERSONAS.filter(p => selectedPersonas.includes(p.id)).map(persona => (
+                selectedPlatforms.map(platform => {
+                  const isDone = !!results[persona.id]?.[platform];
+                  const isActive = currentPlatform === `${persona.icon} ${persona.name} · ${platform}`;
+                  return (
+                    <div key={`${persona.id}-${platform}`} style={{ ...card({padding:"8px 14px"}), fontSize:11, fontFamily:"Calibri,sans-serif",
+                      border:`1px solid ${isDone?C.teal:isActive?C.gold:C.navy3}`, color:isDone?C.tealL:isActive?C.gold:C.grey }}>
+                      {isDone?"✓ ":isActive?"⟳ ":""}{persona.icon} {persona.name} · {platform}
+                    </div>
+                  );
+                })
+              ))}
             </div>
-            <div style={{ fontSize:12, color:C.grey, fontFamily:"Calibri,sans-serif", marginTop:8 }}>{progress.done}/{progress.total} platforms complete</div>
           </div>
         )}
 
-        {/* STEP 4 — Results */}
-        {step === 4 && (
+        {/* STEP 5 — Results */}
+        {step === 5 && (
           <div>
+            {(() => {
+              const activePers = PERSONAS.filter(p => selectedPersonas.includes(p.id));
+              const activePlats = selectedPlatforms.length ? selectedPlatforms : PLATFORMS;
+              const getCount = (pub, platform) => activePers.reduce((sum, per) => sum + (results[per.id]?.[platform]?.counts?.[pub] || 0), 0);
+              const maxPerPlatform = activePers.length * activeQ.length;
+              const maxTotal = activePers.length * activePlats.length * activeQ.length;
+              const pubs = parsePubInput(pubInput);
+              return (<>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:24 }}>
               <div>
                 <h2 style={{ fontSize:22, fontWeight:700, marginBottom:4 }}>Publication Authority Results</h2>
                 <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:13 }}>
-                  Signal Noir™ · {config.agency} · {activeQ.length} queries · {parsePubInput(pubInput).length} publications · Session {sessionId}
+                  Signal Noir™ · {config.agency} · {activeQ.length} queries · {activePers.length} personas · {pubs.length} publications · Session {sessionId}
                 </p>
                 {sheetTab && (
                   <div style={{ marginTop:6, fontSize:12, fontFamily:"Calibri,sans-serif", color:C.teal }}>
@@ -450,21 +505,20 @@ export default function Mode2() {
                 <thead>
                   <tr style={{ borderBottom:`2px solid ${C.navy3}` }}>
                     <th style={{ textAlign:"left", padding:"10px 14px", color:C.greyL, fontWeight:600, minWidth:200 }}>Publication</th>
-                    {PLATFORMS.map(p => (
+                    {activePlats.map(p => (
                       <th key={p} style={{ padding:"10px 14px", color:C.greyL, fontWeight:600, textAlign:"center", minWidth:120 }}>
                         {p}<br/>
-                        <span style={{ fontSize:10, fontWeight:400 }}>(0–{activeQ.length})</span>
+                        <span style={{ fontSize:10, fontWeight:400 }}>(0–{maxPerPlatform})</span>
                       </th>
                     ))}
-                    <th style={{ padding:"10px 14px", color:C.greyL, fontWeight:600, textAlign:"center" }}>Total<br/><span style={{ fontSize:10, fontWeight:400 }}>(0–{activeQ.length*4})</span></th>
+                    <th style={{ padding:"10px 14px", color:C.greyL, fontWeight:600, textAlign:"center" }}>Total<br/><span style={{ fontSize:10, fontWeight:400 }}>(0–{maxTotal})</span></th>
                     <th style={{ padding:"10px 14px", color:C.greyL, fontWeight:600, textAlign:"center" }}>Citation<br/>Rate %</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {parsePubInput(pubInput).map(pub => {
-                    const counts = PLATFORMS.map(p => results[p]?.counts?.[pub] ?? 0);
+                  {pubs.map(pub => {
+                    const counts = activePlats.map(p => getCount(pub, p));
                     const total = counts.reduce((a,b)=>a+b,0);
-                    const maxTotal = PLATFORMS.length * activeQ.length;
                     const rate = maxTotal > 0 ? Math.round(total/maxTotal*100) : 0;
                     const hasAnyCitation = total > 0;
                     return (
@@ -487,11 +541,10 @@ export default function Mode2() {
             </div>
 
             {/* Platform summaries */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:24 }}>
-              {PLATFORMS.map(p => {
-                const pubs = parsePubInput(pubInput);
-                const totalCitations = pubs.reduce((sum, pub) => sum + (results[p]?.counts?.[pub] || 0), 0);
-                const pubsCited = pubs.filter(pub => (results[p]?.counts?.[pub] || 0) > 0).length;
+            <div style={{ display:"grid", gridTemplateColumns:`repeat(${activePlats.length},1fr)`, gap:14, marginBottom:24 }}>
+              {activePlats.map(p => {
+                const totalCitations = pubs.reduce((sum, pub) => sum + getCount(pub, p), 0);
+                const pubsCited = pubs.filter(pub => getCount(pub, p) > 0).length;
                 return (
                   <div key={p} style={{ ...card({textAlign:"center"}) }}>
                     <div style={{ fontSize:22, fontWeight:700, color:C.teal }}>{totalCitations}</div>
@@ -505,9 +558,8 @@ export default function Mode2() {
 
             {/* Top cited publications highlight */}
             {(() => {
-              const pubs = parsePubInput(pubInput);
               const ranked = pubs
-                .map(pub => ({ pub, total: PLATFORMS.reduce((sum,p) => sum+(results[p]?.counts?.[pub]||0),0) }))
+                .map(pub => ({ pub, total: activePlats.reduce((sum,p) => sum+getCount(pub,p),0) }))
                 .filter(x => x.total > 0)
                 .sort((a,b) => b.total-a.total)
                 .slice(0,5);
@@ -520,13 +572,15 @@ export default function Mode2() {
                         <span style={{ fontSize:18, fontWeight:700, color:C.gold }}>{i+1}</span>
                         <div>
                           <div style={{ fontSize:13, fontWeight:700 }}>{pub}</div>
-                          <div style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif" }}>{total} citations across all platforms</div>
+                          <div style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif" }}>{total} citations across all platforms & personas</div>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : null;
+            })()}
+              </>);
             })()}
           </div>
         )}

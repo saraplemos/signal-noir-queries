@@ -358,18 +358,30 @@ export default function Mode2() {
             <p style={{ color:C.greyL, fontFamily:"Calibri,sans-serif", fontSize:14, marginBottom:20 }}>
               Pre-loaded with the 30 Spotlight whitepaper queries. Toggle, edit, or add for each client vertical.
             </p>
-            <div style={{ display:"flex", gap:0, marginBottom:20 }}>
-              {CATEGORIES.map(cat => (
-                <button key={cat} onClick={() => { setActiveCategory(cat); setShowBatch(false); setBatchInput(""); }} style={{
-                  background: activeCategory===cat ? `${CAT_COLORS[cat]}22` : "none",
-                  border: activeCategory===cat ? `1px solid ${CAT_COLORS[cat]}66` : `1px solid ${C.navy3}`,
-                  color: activeCategory===cat ? CAT_COLORS[cat] : C.greyL,
-                  padding:"8px 20px", fontSize:12, fontFamily:"Calibri,sans-serif", fontWeight:600, cursor:"pointer", letterSpacing:0.5,
-                  borderRadius: cat==="destination" ? "6px 0 0 6px" : cat==="planning" ? "0 6px 6px 0" : "0",
-                }}>
-                  {CAT_LABELS[cat].toUpperCase()} ({queries[cat].filter(q=>q.active).length})
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <div style={{ display:"flex", gap:0 }}>
+                {CATEGORIES.map(cat => (
+                  <button key={cat} onClick={() => { setActiveCategory(cat); setShowBatch(false); setBatchInput(""); }} style={{
+                    background: activeCategory===cat ? `${CAT_COLORS[cat]}22` : "none",
+                    border: activeCategory===cat ? `1px solid ${CAT_COLORS[cat]}66` : `1px solid ${C.navy3}`,
+                    color: activeCategory===cat ? CAT_COLORS[cat] : C.greyL,
+                    padding:"8px 20px", fontSize:12, fontFamily:"Calibri,sans-serif", fontWeight:600, cursor:"pointer", letterSpacing:0.5,
+                    borderRadius: cat==="destination" ? "6px 0 0 6px" : cat==="planning" ? "0 6px 6px 0" : "0",
+                  }}>
+                    {CAT_LABELS[cat].toUpperCase()} ({queries[cat].filter(q=>q.active).length})
+                  </button>
+                ))}
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={() => setQueries(prev => ({...prev, [activeCategory]: []}))}
+                  style={{ ...btn("none", C.grey, {border:`1px solid ${C.navy3}`, fontSize:11, padding:"5px 12px"}) }}>
+                  Clear {CAT_LABELS[activeCategory]}
                 </button>
-              ))}
+                <button onClick={() => setQueries({ destination:[], experience:[], planning:[] })}
+                  style={{ ...btn("none", "#e05252", {border:`1px solid #e0525244`, fontSize:11, padding:"5px 12px"}) }}>
+                  Clear all
+                </button>
+              </div>
             </div>
             <div style={{ maxWidth:680 }}>
               {queries[activeCategory].map((q,i) => (

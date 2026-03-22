@@ -4,7 +4,7 @@ import { MODE2_SYSTEM_PROMPT, MODE2_USER_PROMPT, parseTableResponse } from "../.
 const PLATFORM_CONFIGS = {
   Claude: {
     url: "https://api.anthropic.com/v1/messages",
-    buildRequest: (userPrompt, systemPrompt) => ({
+    buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -14,6 +14,7 @@ const PLATFORM_CONFIGS = {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 4096,
+        temperature,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
       }),
@@ -22,7 +23,7 @@ const PLATFORM_CONFIGS = {
   },
   ChatGPT: {
     url: "https://api.openai.com/v1/chat/completions",
-    buildRequest: (userPrompt, systemPrompt) => ({
+    buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -31,6 +32,7 @@ const PLATFORM_CONFIGS = {
       body: JSON.stringify({
         model: "gpt-4o",
         max_tokens: 4096,
+        temperature,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -41,7 +43,7 @@ const PLATFORM_CONFIGS = {
   },
   Perplexity: {
     url: "https://api.perplexity.ai/chat/completions",
-    buildRequest: (userPrompt, systemPrompt) => ({
+    buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -50,6 +52,7 @@ const PLATFORM_CONFIGS = {
       body: JSON.stringify({
         model: "llama-3.1-sonar-large-128k-online",
         max_tokens: 4096,
+        temperature,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -65,13 +68,13 @@ const PLATFORM_CONFIGS = {
   },
   Gemini: {
     url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent`,
-    buildRequest: (userPrompt, systemPrompt) => ({
+    buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: { maxOutputTokens: 4096 },
+        generationConfig: { maxOutputTokens: 4096, temperature },
       }),
     }),
     extractText: (data) => data.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "",
@@ -85,18 +88,19 @@ export default async function handler(req, res) {
   const payload = await verifyToken(token);
   if (!payload) return res.status(401).json({ error: "Unauthorised" });
 
-  const { platform, queries, publications, personaPrompt } = req.body;
+  const { platform, queries, publications, personaPrompt, personaTemperature, personaQueryFraming } = req.body;
   const config = PLATFORM_CONFIGS[platform];
   if (!config) return res.status(400).json({ error: "Unknown platform" });
 
   const systemPrompt = personaPrompt || MODE2_SYSTEM_PROMPT;
-  const userPrompt = MODE2_USER_PROMPT(queries);
+  const temperature = personaTemperature ?? 0.7;
+  const userPrompt = MODE2_USER_PROMPT(queries, personaQueryFraming);
 
   try {
     let url = config.url;
     if (config.urlSuffix) url += `?key=${process.env.GEMINI_API_KEY}`;
 
-    const response = await fetch(url, config.buildRequest(userPrompt, systemPrompt));
+    const response = await fetch(url, config.buildRequest(userPrompt, systemPrompt, temperature));
     const data = await response.json();
     const text = config.extractText(data);
     const { counts, queryResults } = parseTableResponse(text, publications);

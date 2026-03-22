@@ -136,7 +136,7 @@ export default function Mode2() {
           const res = await fetch("/api/query/mode2", {
             method: "POST",
             headers: { "Content-Type":"application/json" },
-            body: JSON.stringify({ platform, queries: queryTexts, publications: pubs, personaPrompt: persona.prompt }),
+            body: JSON.stringify({ platform, queries: queryTexts, publications: pubs, personaPrompt: persona.prompt, personaTemperature: persona.temperature, personaQueryFraming: persona.queryFraming }),
           });
           const data = await res.json();
           newResults[persona.id][platform] = data;

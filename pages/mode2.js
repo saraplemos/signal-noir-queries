@@ -20,9 +20,10 @@ const DEFAULT_PUBLICATIONS = [
   "Condé Nast Traveller","OutThere","Elite Traveler","BA High Life",
   "National Geographic Traveller","Centurion & Departures","The Times",
   "The Telegraph","The Financial Times","FT How to Spend It","Country Life",
-  "Stylist","Elle","Robb Report","Country & Town House","Tatler","Wallpaper*",
-  "Vogue","HELLO! Luxe","Harper's Bazaar","Times Lux Magazine","House & Garden",
-  "Livingetc","Spear's","Forbes","Good Housekeeping","Marie Claire","Aspire","TTG Luxury",
+  "Stylist","Elle","Robb Report","Country & Town House","Tatler","Wallpaper",
+  "Vogue","HELLO! Luxe","Harper's Bazaar","Times Luxx Magazine","House & Garden",
+  "Livingetc","Spear's","Forbes","Good Housekeeping","Marie Claire","AspireMag","TTG Luxury",
+  "The Blend Journal",
 ];
 
 const DEFAULT_QUERIES = {

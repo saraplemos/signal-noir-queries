@@ -105,30 +105,93 @@ function allActive(queries) {
   return CATEGORIES.flatMap(cat => queries[cat].filter(q => q.active));
 }
 
+const PUB_URLS = {
+  "condé nast traveller": "https://www.cntraveller.com",
+  "conde nast traveller": "https://www.cntraveller.com",
+  "cntraveller": "https://www.cntraveller.com",
+  "outthere": "https://www.outtheremag.com",
+  "outthere magazine": "https://www.outtheremag.com",
+  "elite traveler": "https://www.elitetraveler.com",
+  "elite traveller": "https://www.elitetraveler.com",
+  "ba high life": "https://www.ba.com/highlife",
+  "national geographic traveller": "https://www.nationalgeographic.co.uk/travel",
+  "national geographic traveler": "https://www.nationalgeographic.co.uk/travel",
+  "centurion & departures": "https://www.departures.com",
+  "departures": "https://www.departures.com",
+  "the times": "https://www.thetimes.co.uk",
+  "the telegraph": "https://www.telegraph.co.uk",
+  "the financial times": "https://www.ft.com",
+  "financial times": "https://www.ft.com",
+  "ft how to spend it": "https://www.ft.com/htsi",
+  "how to spend it": "https://www.ft.com/htsi",
+  "ft htsi": "https://www.ft.com/htsi",
+  "country life": "https://www.countrylife.co.uk",
+  "stylist": "https://www.stylist.co.uk",
+  "elle": "https://www.elle.com/uk",
+  "robb report": "https://robbreport.com",
+  "country & town house": "https://www.countryandtownhouse.com",
+  "country and town house": "https://www.countryandtownhouse.com",
+  "tatler": "https://www.tatler.com",
+  "wallpaper": "https://www.wallpaper.com",
+  "wallpaper*": "https://www.wallpaper.com",
+  "vogue": "https://www.vogue.co.uk",
+  "hello! luxe": "https://www.hellomagazine.com/hubs/luxe",
+  "hello luxe": "https://www.hellomagazine.com/hubs/luxe",
+  "harper's bazaar": "https://www.harpersbazaar.com/uk",
+  "harpers bazaar": "https://www.harpersbazaar.com/uk",
+  "times luxx magazine": "https://www.thetimes.co.uk/luxx",
+  "times luxx": "https://www.thetimes.co.uk/luxx",
+  "house & garden": "https://www.houseandgarden.co.uk",
+  "livingetc": "https://www.livingetc.com",
+  "spear's": "https://spearswms.com",
+  "spears": "https://spearswms.com",
+  "forbes": "https://www.forbes.com",
+  "good housekeeping": "https://www.goodhousekeeping.com/uk",
+  "marie claire": "https://www.marieclaire.co.uk",
+  "aspiremag": "https://www.aspiremag.co.uk",
+  "aspire": "https://www.aspiremag.co.uk",
+  "ttg luxury": "https://www.ttgmedia.com/luxury",
+  "the blend journal": "https://theblendjournal.com",
+  "blend journal": "https://theblendjournal.com",
+  "business traveller": "https://www.businesstraveller.com",
+  "robb report": "https://robbreport.com",
+  "travel + leisure": "https://www.travelandleisure.com",
+  "travel and leisure": "https://www.travelandleisure.com",
+  "town & country": "https://www.townandcountrymag.com",
+};
+
+function resolveSourceUrl(part) {
+  // 1. Explicit http URL in text
+  const httpMatch = part.match(/https?:\/\/[^\s)>\]]+/);
+  if (httpMatch) return { url: httpMatch[0].replace(/[.,;)]+$/, ''), label: part.replace(httpMatch[0], '').replace(/[()[\]]/g, '').trim() || httpMatch[0] };
+  // 2. Known publication name lookup
+  const key = part.toLowerCase().replace(/[*]/g, '').trim();
+  if (PUB_URLS[key]) return { url: PUB_URLS[key], label: part.trim() };
+  // Partial match against known pub names
+  for (const [name, url] of Object.entries(PUB_URLS)) {
+    if (key.includes(name) || name.includes(key)) return { url, label: part.trim() };
+  }
+  // 3. Bare domain
+  const domainMatch = part.match(/\b([\w-]+\.(com|co\.uk|travel|org|net|io|magazine|media|press)[\w/.-]*)/i);
+  if (domainMatch) return { url: `https://${domainMatch[0]}`, label: part.trim() };
+  return { url: null, label: part.trim() };
+}
+
 function renderSources(sourcesText) {
   if (!sourcesText) return <span style={{ color:"#64748B" }}>—</span>;
-  // Split on comma or semicolon boundaries
   const parts = sourcesText.split(/[,;]/).map(s => s.trim()).filter(Boolean);
   return parts.map((part, i) => {
-    // Extract explicit http URL
-    const httpMatch = part.match(/https?:\/\/[^\s)>\]]+/);
-    // Extract bare domain (e.g. "thetimes.com", "outthere.travel")
-    const domainMatch = !httpMatch && part.match(/\b([\w-]+\.(com|co\.uk|travel|org|net|io|magazine|media|press)[\w/.-]*)/i);
-    const url = httpMatch ? httpMatch[0].replace(/[.,;)]+$/, '') : domainMatch ? `https://${domainMatch[0]}` : null;
-    // Clean label: strip the URL and any surrounding brackets from display text
-    const label = part.replace(/https?:\/\/[^\s)>\]]+/g, '').replace(/[()[\]]/g, '').trim() || (url ? url : part);
+    const { url, label } = resolveSourceUrl(part);
     return (
       <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
-        {i > 0 && <span style={{ color:"#1C2E42", margin:"0 4px" }}>·</span>}
+        {i > 0 && <span style={{ color:"#1C2E42", margin:"0 6px" }}>·</span>}
         {url ? (
           <a href={url} target="_blank" rel="noopener noreferrer"
-            style={{ color:"#5EEAD4", textDecoration:"none", fontFamily:"Calibri,sans-serif", fontSize:11 }}
-            onMouseOver={e => e.target.style.textDecoration="underline"}
-            onMouseOut={e => e.target.style.textDecoration="none"}>
-            {label}
+            style={{ color:"#5EEAD4", textDecoration:"underline", fontFamily:"Calibri,sans-serif", fontSize:11 }}>
+            {label || part}
           </a>
         ) : (
-          <span style={{ fontFamily:"Calibri,sans-serif", fontSize:11 }}>{part}</span>
+          <span style={{ fontFamily:"Calibri,sans-serif", fontSize:11, color:"#94A3B8" }}>{part}</span>
         )}
       </span>
     );
@@ -756,6 +819,48 @@ export default function Mode2() {
                   </div>
                 </div>
               ) : null;
+            })()}
+            {/* Per-query source breakdown */}
+            {(() => {
+              // Collect all queries that ran, with all sources cited across all personas & platforms
+              const queryMap = {};
+              activePers.forEach(persona => {
+                activePlats.forEach(platform => {
+                  const qrs = results[persona.id]?.[platform]?.queryResults || [];
+                  qrs.forEach(qr => {
+                    if (!qr.query) return;
+                    if (!queryMap[qr.query]) queryMap[qr.query] = { totalCitations: 0, sources: [] };
+                    queryMap[qr.query].totalCitations += (qr.cited?.length || 0);
+                    if (qr.sources) queryMap[qr.query].sources.push({ platform, persona: persona.name, icon: persona.icon, sources: qr.sources });
+                  });
+                });
+              });
+              const queryEntries = Object.entries(queryMap).filter(([,v]) => v.sources.length > 0);
+              if (!queryEntries.length) return null;
+              return (
+                <div style={{ ...card({marginBottom:24}) }}>
+                  <div style={{ fontSize:13, fontWeight:700, marginBottom:16, color:C.purple }}>📋 All Sources by Query</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                    {queryEntries.map(([query, data]) => (
+                      <div key={query} style={{ background:C.navy3, borderRadius:8, padding:14 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:C.white }}>{query}</div>
+                          <div style={{ fontSize:11, color:C.gold, fontFamily:"Calibri,sans-serif", whiteSpace:"nowrap", marginLeft:12 }}>{data.totalCitations} citation{data.totalCitations!==1?"s":""}</div>
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          {data.sources.map((s, i) => (
+                            <div key={i} style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+                              <span style={{ fontSize:10, color:C.teal, fontFamily:"Calibri,sans-serif", fontWeight:600, minWidth:60, flexShrink:0 }}>{s.platform}</span>
+                              <span style={{ fontSize:10, color:C.greyL, fontFamily:"Calibri,sans-serif", minWidth:140, flexShrink:0 }}>{s.icon} {s.persona}</span>
+                              <div style={{ flexWrap:"wrap", display:"flex", alignItems:"center", gap:2 }}>{renderSources(s.sources)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
             })()}
               </>);
             })()}

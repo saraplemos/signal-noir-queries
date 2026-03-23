@@ -310,23 +310,61 @@ export default function Mode2() {
     setStep(5);
   }
 
-  function exportCSV() {
+  function exportExcel() {
     const pubs = parsePubInput(pubInput);
     const activePers = PERSONAS.filter(p => selectedPersonas.includes(p.id));
     const activePlats = selectedPlatforms.length ? selectedPlatforms : PLATFORMS;
     const getCount = (pub, platform) => activePers.reduce((sum, per) => sum + (results[per.id]?.[platform]?.counts?.[pub] || 0), 0);
-    const rows = [["Publication", ...activePlats.map(p=>`${p} Citations`), "Total", "Citation Rate %"]];
-    pubs.forEach(pub => {
+    const maxTotal = activePers.length * activePlats.length * activeQ.length;
+
+    const esc = v => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const cell = (v, type='String') => `<Cell><Data ss:Type="${type}">${esc(v)}</Data></Cell>`;
+    const row = cells => `<Row>${cells.join('')}</Row>`;
+    const sheet = (name, rows) => `<Worksheet ss:Name="${esc(name)}"><Table>${rows.join('')}</Table></Worksheet>`;
+
+    // Sheet 1: Publications
+    const pubHeader = row([cell('Publication'), ...activePlats.map(p => cell(p)), cell('Total'), cell('Citation Rate %')]);
+    const pubRows = [pubHeader, ...pubs.map(pub => {
       const counts = activePlats.map(p => getCount(pub, p));
       const total = counts.reduce((a,b)=>a+b,0);
-      const rate = `${Math.round(total/(activePlats.length*activePers.length*activeQ.length)*100)}%`;
-      rows.push([pub, ...counts, total, rate]);
+      const rate = maxTotal > 0 ? Math.round(total/maxTotal*100) : 0;
+      return row([cell(pub), ...counts.map(c => cell(c,'Number')), cell(total,'Number'), cell(rate+'%')]);
+    })];
+
+    // Sheet 2: By Query — one row per query × platform × persona
+    const qHeader = row([cell('Query'), cell('Platform'), cell('Persona'), cell('Sources Cited'), cell('URLs')]);
+    const qRows = [qHeader];
+    activePers.forEach(persona => {
+      activePlats.forEach(platform => {
+        const qrs = results[persona.id]?.[platform]?.queryResults || [];
+        qrs.forEach(qr => {
+          if (!qr.query) return;
+          const urls = (qr.sources || '').match(/https?:\/\/[^\s)>,;\]]+/g) || [];
+          qRows.push(row([
+            cell(qr.query),
+            cell(platform),
+            cell(`${persona.icon} ${persona.name}`),
+            cell(qr.sources || ''),
+            cell(urls.join(' | ')),
+          ]));
+        });
+      });
     });
-    const csv = rows.map(r => r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], {type:"text/csv"});
+
+    const xml = [
+      '<?xml version="1.0"?>',
+      '<?mso-application progid="Excel.Sheet"?>',
+      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
+      sheet('Publications', pubRows),
+      sheet('By Query', qRows),
+      '</Workbook>',
+    ].join('\n');
+
+    const blob = new Blob([xml], { type:'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href=url; a.download=`signal-noir-publication-authority-${config.agency.replace(/\s+/g,"-")}.csv`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `signal-noir-${config.agency.replace(/\s+/g,'-')}-${sessionId}.xls`;
     a.click();
   }
 
@@ -668,7 +706,7 @@ export default function Mode2() {
                 )}
               </div>
               <div style={{ display:"flex", gap:10 }}>
-                <button style={btn(C.gold, C.navy)} onClick={exportCSV}>↓ Export CSV</button>
+                <button style={btn(C.gold, C.navy)} onClick={exportExcel}>↓ Export Excel</button>
                 <button style={btn(C.navy3, C.greyL, {border:`1px solid ${C.navy3}`})} onClick={() => { setStep(0); setResults({}); }}>New Session</button>
               </div>
             </div>

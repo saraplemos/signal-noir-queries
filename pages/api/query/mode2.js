@@ -68,7 +68,7 @@ const PLATFORM_CONFIGS = {
     },
   },
   Gemini: {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent`,
+    url: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent`,
     buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
       headers: { "Content-Type": "application/json" },

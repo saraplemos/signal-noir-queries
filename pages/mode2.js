@@ -64,6 +64,35 @@ const DEFAULT_QUERIES = {
   ],
 };
 
+const SUGGESTED_QUERIES = {
+  destination: [
+    "Luxury tented camp Serengeti","Luxury lodge Patagonia","Overwater bungalow Bora Bora",
+    "Palazzo hotel Venice","Boutique hotel Santorini","Luxury riad Marrakech",
+    "Eco-luxury lodge Costa Rica","Design hotel New York","Safari lodge Botswana",
+    "Luxury hotel Bali","Luxury chalet Zermatt","Beach resort Turks and Caicos",
+    "Luxury hotel Tokyo","Boutique hotel Lisbon","Luxury resort Tuscany",
+    "Mountain lodge Swiss Alps","Luxury hotel Cape Town","Beachfront villa Mykonos",
+  ],
+  experience: [
+    "Private yacht charter Greek islands","Michelin-starred dining Tokyo",
+    "Private art collection tour Florence","Truffle hunting Umbria",
+    "Polar expedition Svalbard","Hot air balloon Cappadocia",
+    "Private island picnic Seychelles","Sommelier-led wine tour Bordeaux",
+    "Behind-the-scenes fashion week Paris","Submarine dive Maldives",
+    "Private flamenco performance Seville","Night dive Great Barrier Reef",
+    "Falconry experience UAE","Horse riding Camargue","Ice hotel stay Sweden",
+  ],
+  planning: [
+    "Honeymoon itinerary Maldives","Solo luxury travel Japan",
+    "Women-only wellness retreat Bali","Multi-destination private jet itinerary",
+    "Luxury family safari Kenya","Romantic break Paris with private guide",
+    "Corporate retreat Tuscany","Bespoke wine tour Burgundy",
+    "Luxury spa break UK","Private island hire Caribbean",
+    "Adventure honeymoon Patagonia","Cultural luxury tour India",
+    "Photography expedition Iceland","Culinary tour Japan","Wellness sabbatical Sri Lanka",
+  ],
+};
+
 // styles
 const btn = (bg=C.teal, col=C.white, extra={}) => ({ background:bg, color:col, border:"none", borderRadius:6, padding:"9px 20px", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Calibri, sans-serif", transition:"opacity 0.15s", ...extra });
 const card = (extra={}) => ({ background:C.navy2, border:`1px solid ${C.navy3}`, borderRadius:10, padding:20, ...extra });
@@ -95,6 +124,7 @@ export default function Mode2() {
   const [selectedPersonas, setSelectedPersonas] = useState(PERSONAS.map(p => p.id));
   const [batchInput, setBatchInput] = useState("");
   const [showBatch, setShowBatch] = useState(false);
+  const [showSuggested, setShowSuggested] = useState(false);
   const [expandedPub, setExpandedPub] = useState(null);
 
   useEffect(() => {
@@ -362,7 +392,7 @@ export default function Mode2() {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
               <div style={{ display:"flex", gap:0 }}>
                 {CATEGORIES.map(cat => (
-                  <button key={cat} onClick={() => { setActiveCategory(cat); setShowBatch(false); setBatchInput(""); }} style={{
+                  <button key={cat} onClick={() => { setActiveCategory(cat); setShowBatch(false); setBatchInput(""); setShowSuggested(false); }} style={{
                     background: activeCategory===cat ? `${CAT_COLORS[cat]}22` : "none",
                     border: activeCategory===cat ? `1px solid ${CAT_COLORS[cat]}66` : `1px solid ${C.navy3}`,
                     color: activeCategory===cat ? CAT_COLORS[cat] : C.greyL,
@@ -435,6 +465,31 @@ export default function Mode2() {
                   >
                     Add {batchInput.split("\n").filter(s=>s.trim()).length || 0} quer{batchInput.split("\n").filter(s=>s.trim()).length===1?"y":"ies"}
                   </button>
+                </div>
+              )}
+              <button onClick={() => { setShowSuggested(s => !s); setShowBatch(false); setBatchInput(""); }}
+                style={{ ...btn("none", C.purple, {border:`1px dashed ${C.purple}66`, marginTop:8, marginLeft:8}) }}>
+                {showSuggested ? "✕ Hide suggestions" : "✦ Suggested"}
+              </button>
+              {showSuggested && (
+                <div style={{ marginTop:12, background:C.navy2, border:`1px solid ${C.purple}44`, borderRadius:8, padding:16 }}>
+                  <p style={{ fontSize:12, color:C.greyL, fontFamily:"Calibri,sans-serif", marginBottom:12 }}>
+                    Click any suggestion to add it instantly to <strong style={{color:CAT_COLORS[activeCategory]}}>{CAT_LABELS[activeCategory]}</strong>.
+                  </p>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                    {SUGGESTED_QUERIES[activeCategory]
+                      .filter(s => !queries[activeCategory].some(q => q.text.toLowerCase() === s.toLowerCase()))
+                      .map(s => (
+                        <button key={s} onClick={() => {
+                          const id = activeCategory[0]+Date.now()+Math.random();
+                          setQueries(prev => ({...prev, [activeCategory]: [...prev[activeCategory], {id, text:s, active:true}]}));
+                        }}
+                          style={{ background:C.navy3, border:`1px solid ${C.purple}44`, color:C.greyL, borderRadius:20, padding:"5px 14px", fontSize:12, fontFamily:"Calibri,sans-serif", cursor:"pointer" }}>
+                          + {s}
+                        </button>
+                      ))
+                    }
+                  </div>
                 </div>
               )}
             </div>

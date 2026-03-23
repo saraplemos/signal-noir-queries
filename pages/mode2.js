@@ -341,6 +341,11 @@ export default function Mode2() {
               <div style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif", marginTop:8 }}>
                 {parsePubInput(pubInput).length} publications · Tool will scan all AI responses for these names
               </div>
+              {parsePubInput(pubInput).some(p => p.startsWith('http')) && (
+                <div style={{ marginTop:8, fontSize:11, color:C.gold, fontFamily:"Calibri,sans-serif", background:`${C.gold}11`, border:`1px solid ${C.gold}33`, borderRadius:6, padding:"8px 12px" }}>
+                  ⚠ Some entries look like URLs. The tool can match on domain names, but AI responses cite publication names — use names like "The Times" or "HELLO! Luxe" for the most reliable matching.
+                </div>
+              )}
             </div>
             <button style={{ ...btn(C.teal, C.white, {marginTop:24}), opacity: parsePubInput(pubInput).length ? 1 : 0.4 }}
               disabled={!parsePubInput(pubInput).length} onClick={() => setStep(2)}>

@@ -105,6 +105,36 @@ function allActive(queries) {
   return CATEGORIES.flatMap(cat => queries[cat].filter(q => q.active));
 }
 
+function renderSources(sourcesText) {
+  if (!sourcesText) return <span style={{ color:"#64748B" }}>—</span>;
+  // Split on comma or semicolon boundaries
+  const parts = sourcesText.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+  return parts.map((part, i) => {
+    // Extract explicit http URL
+    const httpMatch = part.match(/https?:\/\/[^\s)>\]]+/);
+    // Extract bare domain (e.g. "thetimes.com", "outthere.travel")
+    const domainMatch = !httpMatch && part.match(/\b([\w-]+\.(com|co\.uk|travel|org|net|io|magazine|media|press)[\w/.-]*)/i);
+    const url = httpMatch ? httpMatch[0].replace(/[.,;)]+$/, '') : domainMatch ? `https://${domainMatch[0]}` : null;
+    // Clean label: strip the URL and any surrounding brackets from display text
+    const label = part.replace(/https?:\/\/[^\s)>\]]+/g, '').replace(/[()[\]]/g, '').trim() || (url ? url : part);
+    return (
+      <span key={i} style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
+        {i > 0 && <span style={{ color:"#1C2E42", margin:"0 4px" }}>·</span>}
+        {url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            style={{ color:"#5EEAD4", textDecoration:"none", fontFamily:"Calibri,sans-serif", fontSize:11 }}
+            onMouseOver={e => e.target.style.textDecoration="underline"}
+            onMouseOut={e => e.target.style.textDecoration="none"}>
+            {label}
+          </a>
+        ) : (
+          <span style={{ fontFamily:"Calibri,sans-serif", fontSize:11 }}>{part}</span>
+        )}
+      </span>
+    );
+  });
+}
+
 export default function Mode2() {
   const router = useRouter();
   const [tester, setTester] = useState("");
@@ -647,7 +677,7 @@ export default function Mode2() {
                                     <span style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif" }}>·</span>
                                     <span style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif", fontStyle:"italic" }}>"{d.query}"</span>
                                   </div>
-                                  <div style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif", lineHeight:1.6, wordBreak:"break-word" }}>{d.sources}</div>
+                                  <div style={{ lineHeight:1.8, wordBreak:"break-word", flexWrap:"wrap", display:"flex", alignItems:"center", gap:2 }}>{renderSources(d.sources)}</div>
                                 </div>
                               ))}
                             </div>

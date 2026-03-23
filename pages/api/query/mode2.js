@@ -115,8 +115,8 @@ export default async function handler(req, res) {
     const text = config.extractText(data);
 
     if (!text) {
-      console.error(`${platform} returned empty text. Raw response:`, JSON.stringify(data).slice(0, 500));
-      return res.status(200).json({ error: `${platform} returned an empty response`, rawData: data, counts: {}, queryResults: [] });
+      console.error(`${platform} returned empty text. Raw:`, JSON.stringify(data).slice(0, 800));
+      return res.status(200).json({ error: `${platform} returned an empty response`, rawData: JSON.stringify(data).slice(0, 800), counts: {}, queryResults: [] });
     }
 
     const { counts, queryResults } = parseTableResponse(text, publications);

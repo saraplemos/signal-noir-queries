@@ -671,6 +671,33 @@ export default function Mode2() {
               })}
             </div>
 
+            {/* Platform diagnostics — shown for any platform with zero citations */}
+            {activePlats.some(p => pubs.reduce((sum, pub) => sum + getCount(pub, p), 0) === 0) && (
+              <div style={{ ...card({marginBottom:24}), border:`1px solid #e0525244` }}>
+                <div style={{ fontSize:12, fontWeight:700, color:"#e05252", marginBottom:12 }}>⚠ Platform Diagnostics — platforms with 0 citations</div>
+                {activePlats.filter(p => pubs.reduce((sum, pub) => sum + getCount(pub, p), 0) === 0).map(p => {
+                  // grab first persona's response for this platform
+                  const firstPersona = activePers[0];
+                  const d = results[firstPersona?.id]?.[p];
+                  return (
+                    <div key={p} style={{ marginBottom:12, background:C.navy3, borderRadius:6, padding:12 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:C.greyL, marginBottom:6 }}>{p}</div>
+                      {d?.error ? (
+                        <div style={{ fontSize:11, color:"#e05252", fontFamily:"Calibri,sans-serif" }}>Error: {d.error}</div>
+                      ) : d?.text ? (
+                        <details>
+                          <summary style={{ fontSize:11, color:C.gold, fontFamily:"Calibri,sans-serif", cursor:"pointer" }}>Response received but 0 citations matched — click to inspect raw text</summary>
+                          <pre style={{ fontSize:10, color:C.greyL, fontFamily:"monospace", marginTop:8, whiteSpace:"pre-wrap", wordBreak:"break-all", maxHeight:200, overflowY:"auto" }}>{d.text.slice(0, 2000)}</pre>
+                        </details>
+                      ) : (
+                        <div style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif" }}>No response data available</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Top cited publications highlight */}
             {(() => {
               const ranked = pubs

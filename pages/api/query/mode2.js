@@ -50,7 +50,7 @@ const PLATFORM_CONFIGS = {
         Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "sonar-pro",
+        model: "sonar",
         max_tokens: 4096,
         temperature,
         messages: [
@@ -68,7 +68,7 @@ const PLATFORM_CONFIGS = {
     },
   },
   Gemini: {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`,
+    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent`,
     buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
       headers: { "Content-Type": "application/json" },

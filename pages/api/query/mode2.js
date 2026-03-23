@@ -98,7 +98,7 @@ export default async function handler(req, res) {
 
   const systemPrompt = personaPrompt || MODE2_SYSTEM_PROMPT;
   const temperature = personaTemperature ?? 0.7;
-  const userPrompt = MODE2_USER_PROMPT(queries, personaQueryFraming);
+  const userPrompt = MODE2_USER_PROMPT(queries, personaQueryFraming, publications);
 
   try {
     let url = config.url;

@@ -50,7 +50,7 @@ const PLATFORM_CONFIGS = {
         Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.1-sonar-large-128k-online",
+        model: "sonar-pro",
         max_tokens: 4096,
         temperature,
         messages: [
@@ -61,13 +61,14 @@ const PLATFORM_CONFIGS = {
       }),
     }),
     extractText: (data) => {
+      if (data.error) throw new Error(`Perplexity error: ${JSON.stringify(data.error)}`);
       const text = data.choices?.[0]?.message?.content || "";
       const citations = data.citations || [];
       return citations.length ? `${text}\n\n[Native citations: ${citations.join(", ")}]` : text;
     },
   },
   Gemini: {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent`,
+    url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
     buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -77,7 +78,10 @@ const PLATFORM_CONFIGS = {
         generationConfig: { maxOutputTokens: 4096, temperature },
       }),
     }),
-    extractText: (data) => data.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "",
+    extractText: (data) => {
+      if (data.error) throw new Error(`Gemini error: ${JSON.stringify(data.error)}`);
+      return data.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+    },
     urlSuffix: true,
   },
 };
@@ -102,12 +106,24 @@ export default async function handler(req, res) {
 
     const response = await fetch(url, config.buildRequest(userPrompt, systemPrompt, temperature));
     const data = await response.json();
-    const text = config.extractText(data);
-    const { counts, queryResults } = parseTableResponse(text, publications);
 
+    if (!response.ok) {
+      const msg = data?.error?.message || data?.error || JSON.stringify(data);
+      return res.status(200).json({ error: `${platform} API error (${response.status}): ${msg}`, counts: {}, queryResults: [] });
+    }
+
+    const text = config.extractText(data);
+
+    if (!text) {
+      console.error(`${platform} returned empty text. Raw response:`, JSON.stringify(data).slice(0, 500));
+      return res.status(200).json({ error: `${platform} returned an empty response`, rawData: data, counts: {}, queryResults: [] });
+    }
+
+    const { counts, queryResults } = parseTableResponse(text, publications);
     res.status(200).json({ text, counts, queryResults });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error(`${platform} exception:`, e.message);
+    res.status(200).json({ error: e.message, counts: {}, queryResults: [] });
   }
 }
 

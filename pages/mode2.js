@@ -529,12 +529,15 @@ export default function Mode2() {
             <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
               {PERSONAS.filter(p => selectedPersonas.includes(p.id)).map(persona => (
                 selectedPlatforms.map(platform => {
-                  const isDone = !!results[persona.id]?.[platform];
+                  const resultData = results[persona.id]?.[platform];
+                  const isDone = !!resultData;
+                  const hasError = !!resultData?.error;
                   const isActive = currentPlatform === `${persona.icon} ${persona.name} · ${platform}`;
                   return (
-                    <div key={`${persona.id}-${platform}`} style={{ ...card({padding:"8px 14px"}), fontSize:11, fontFamily:"Calibri,sans-serif",
-                      border:`1px solid ${isDone?C.teal:isActive?C.gold:C.navy3}`, color:isDone?C.tealL:isActive?C.gold:C.grey }}>
-                      {isDone?"✓ ":isActive?"⟳ ":""}{persona.icon} {persona.name} · {platform}
+                    <div key={`${persona.id}-${platform}`} title={hasError ? resultData.error : undefined}
+                      style={{ ...card({padding:"8px 14px"}), fontSize:11, fontFamily:"Calibri,sans-serif",
+                      border:`1px solid ${hasError?"#e05252":isDone?C.teal:isActive?C.gold:C.navy3}`, color:hasError?"#e05252":isDone?C.tealL:isActive?C.gold:C.grey }}>
+                      {hasError?"✗ ":isDone?"✓ ":isActive?"⟳ ":""}{persona.icon} {persona.name} · {platform}
                     </div>
                   );
                 })

@@ -685,12 +685,12 @@ export default function Mode2() {
                       {d?.error ? (
                         <div style={{ fontSize:11, color:"#e05252", fontFamily:"Calibri,sans-serif" }}>Error: {d.error}</div>
                       ) : d?.text ? (
-                        <details>
-                          <summary style={{ fontSize:11, color:C.gold, fontFamily:"Calibri,sans-serif", cursor:"pointer" }}>Response received but 0 citations matched — click to inspect raw text</summary>
-                          <pre style={{ fontSize:10, color:C.greyL, fontFamily:"monospace", marginTop:8, whiteSpace:"pre-wrap", wordBreak:"break-all", maxHeight:200, overflowY:"auto" }}>{d.text.slice(0, 2000)}</pre>
-                        </details>
+                        <>
+                          <div style={{ fontSize:11, color:C.gold, fontFamily:"Calibri,sans-serif", marginBottom:6 }}>Response received but 0 citations matched. Raw output (first 1500 chars):</div>
+                          <pre style={{ fontSize:10, color:C.greyL, fontFamily:"monospace", whiteSpace:"pre-wrap", wordBreak:"break-all", maxHeight:300, overflowY:"auto", background:C.navy, borderRadius:4, padding:8 }}>{d.text.slice(0, 1500)}</pre>
+                        </>
                       ) : (
-                        <div style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif" }}>No response data available</div>
+                        <div style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif" }}>No response data — {JSON.stringify(d)}</div>
                       )}
                     </div>
                   );

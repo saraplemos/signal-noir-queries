@@ -95,6 +95,7 @@ export default function Mode2() {
   const [selectedPersonas, setSelectedPersonas] = useState(PERSONAS.map(p => p.id));
   const [batchInput, setBatchInput] = useState("");
   const [showBatch, setShowBatch] = useState(false);
+  const [expandedPub, setExpandedPub] = useState(null);
 
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(d => {
@@ -533,9 +534,28 @@ export default function Mode2() {
                     const total = counts.reduce((a,b)=>a+b,0);
                     const rate = maxTotal > 0 ? Math.round(total/maxTotal*100) : 0;
                     const hasAnyCitation = total > 0;
-                    return (
-                      <tr key={pub} style={{ borderTop:`1px solid ${C.navy3}`, background: hasAnyCitation ? `${C.teal}08` : "none" }}>
-                        <td style={{ padding:"9px 14px", color: hasAnyCitation ? C.white : C.greyL, fontWeight: hasAnyCitation ? 600 : 400 }}>{pub}</td>
+                    const isExpanded = expandedPub === pub;
+
+                    // Collect all source entries where this pub was cited
+                    const citationDetails = [];
+                    activePers.forEach(persona => {
+                      activePlats.forEach(platform => {
+                        const qrs = results[persona.id]?.[platform]?.queryResults || [];
+                        qrs.forEach(qr => {
+                          if (qr.cited?.includes(pub)) {
+                            citationDetails.push({ persona: persona.name, icon: persona.icon, platform, query: qr.query, sources: qr.sources });
+                          }
+                        });
+                      });
+                    });
+
+                    return (<>
+                      <tr key={pub} onClick={() => hasAnyCitation && setExpandedPub(isExpanded ? null : pub)}
+                        style={{ borderTop:`1px solid ${C.navy3}`, background: isExpanded ? `${C.teal}14` : hasAnyCitation ? `${C.teal}08` : "none", cursor: hasAnyCitation ? "pointer" : "default" }}>
+                        <td style={{ padding:"9px 14px", color: hasAnyCitation ? C.white : C.greyL, fontWeight: hasAnyCitation ? 600 : 400 }}>
+                          {hasAnyCitation && <span style={{ fontSize:10, color:C.teal, marginRight:6 }}>{isExpanded ? "▾" : "▸"}</span>}
+                          {pub}
+                        </td>
                         {counts.map((c,i) => (
                           <td key={i} style={{ padding:"9px 14px", textAlign:"center", color: c>0?C.tealL:C.grey, fontWeight: c>0?700:400 }}>
                             {c > 0 ? c : "–"}
@@ -546,7 +566,27 @@ export default function Mode2() {
                           {rate > 0 ? `${rate}%` : "–"}
                         </td>
                       </tr>
-                    );
+                      {isExpanded && (
+                        <tr key={pub+"-detail"}>
+                          <td colSpan={activePlats.length + 3} style={{ padding:"0 14px 16px", background:`${C.teal}08` }}>
+                            <div style={{ borderTop:`1px solid ${C.teal}22`, paddingTop:12, display:"flex", flexDirection:"column", gap:8 }}>
+                              {citationDetails.map((d, i) => (
+                                <div key={i} style={{ background:C.navy2, borderRadius:6, padding:"10px 14px", border:`1px solid ${C.navy3}` }}>
+                                  <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6, flexWrap:"wrap" }}>
+                                    <span style={{ fontSize:11, color:C.teal, fontFamily:"Calibri,sans-serif", fontWeight:600 }}>{d.platform}</span>
+                                    <span style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif" }}>·</span>
+                                    <span style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif" }}>{d.icon} {d.persona}</span>
+                                    <span style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif" }}>·</span>
+                                    <span style={{ fontSize:11, color:C.grey, fontFamily:"Calibri,sans-serif", fontStyle:"italic" }}>"{d.query}"</span>
+                                  </div>
+                                  <div style={{ fontSize:11, color:C.greyL, fontFamily:"Calibri,sans-serif", lineHeight:1.6, wordBreak:"break-word" }}>{d.sources}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>);
                   })}
                 </tbody>
               </table>

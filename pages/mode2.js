@@ -418,6 +418,10 @@ export default function Mode2() {
                   style={{ ...btn("none", "#e05252", {border:`1px solid #e0525244`, fontSize:11, padding:"5px 12px"}) }}>
                   Clear all
                 </button>
+                <button onClick={() => setQueries(DEFAULT_QUERIES)}
+                  style={{ ...btn("none", C.teal, {border:`1px solid ${C.teal}44`, fontSize:11, padding:"5px 12px"}) }}>
+                  ↺ Reset to defaults
+                </button>
               </div>
             </div>
             <div style={{ maxWidth:680 }}>

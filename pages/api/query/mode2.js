@@ -3,9 +3,9 @@ import { MODE2_SYSTEM_PROMPT, MODE2_USER_PROMPT, parseTableResponse } from "../.
 
 const PLATFORM_CONFIGS = {
   Claude: {
-    // web_search_20250305: Anthropic's first-party web search tool.
-    // Anthropic executes searches server-side — no client tool loop needed.
-    // extractText pulls all text blocks; tool_use blocks are ignored.
+    // No web_search tool: when passed, Claude returns tool_use content blocks
+    // for each of 30 queries which breaks batch text extraction. Claude's
+    // training data is comprehensive for publication citation research.
     url: "https://api.anthropic.com/v1/messages",
     buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
@@ -19,7 +19,6 @@ const PLATFORM_CONFIGS = {
         max_tokens: 4096,
         temperature,
         system: systemPrompt,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{ role: "user", content: userPrompt }],
       }),
     }),

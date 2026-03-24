@@ -220,12 +220,19 @@ export default function Mode2() {
   const [showBatch, setShowBatch] = useState(false);
   const [showSuggested, setShowSuggested] = useState(false);
   const [expandedPub, setExpandedPub] = useState(null);
+  const [savedSessions, setSavedSessions] = useState([]);
+  const [showSessions, setShowSessions] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(d => {
       if (d?.name) setTester(d.name);
       else router.push("/");
     });
+    // Load saved sessions index from localStorage
+    try {
+      const idx = JSON.parse(localStorage.getItem("sn2_sessions_index") || "[]");
+      setSavedSessions(idx);
+    } catch {}
   }, []);
 
   async function logout() {
@@ -244,7 +251,14 @@ export default function Mode2() {
     setRunning(true);
     const pubs = parsePubInput(pubInput);
     setPublications(pubs);
-    const queryTexts = activeQ.map(q => q.text);
+    // Deduplicate queries case-insensitively (e.g. "Private Vatican tour" vs "Private Vatican Tour")
+    const seenQ = new Set();
+    const queryTexts = activeQ.map(q => q.text.trim()).filter(t => {
+      const key = t.toLowerCase();
+      if (seenQ.has(key)) return false;
+      seenQ.add(key);
+      return true;
+    });
     const newResults = {}; // { [personaId]: { [platform]: { counts, queryResults } } }
 
     const activePlats = selectedPlatforms.length ? selectedPlatforms : PLATFORMS;
@@ -307,7 +321,41 @@ export default function Mode2() {
       console.error("Sheet log failed:", e);
     }
 
+    // Auto-save session to localStorage
+    try {
+      const ts = new Date();
+      const label = `${config.agency} / ${config.vertical} / ${ts.toLocaleDateString('en-GB')} ${ts.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+      const sessionData = {
+        id: sessionId, label, ts: ts.toISOString(),
+        agency: config.agency, vertical: config.vertical,
+        publications: pubs, queries: queryTexts,
+        platforms: activePlats, personas: activePers.map(p=>p.id),
+        results: newResults, sheetTab,
+      };
+      localStorage.setItem(`sn2_session_${sessionId}`, JSON.stringify(sessionData));
+      const idx = JSON.parse(localStorage.getItem("sn2_sessions_index") || "[]");
+      const newIdx = [{ id: sessionId, label, ts: ts.toISOString() }, ...idx].slice(0, 20); // keep last 20
+      localStorage.setItem("sn2_sessions_index", JSON.stringify(newIdx));
+      setSavedSessions(newIdx);
+    } catch(e) { console.warn("Session save failed:", e.message); }
+
     setStep(5);
+  }
+
+  function loadSession(id) {
+    try {
+      const data = JSON.parse(localStorage.getItem(`sn2_session_${id}`) || "null");
+      if (!data) return;
+      setResults(data.results);
+      setPubInput(data.publications.join("\n"));
+      setPublications(data.publications);
+      setConfig(c => ({ ...c, agency: data.agency, vertical: data.vertical }));
+      setSheetTab(data.sheetTab || "");
+      setSelectedPlatforms(data.platforms);
+      setSelectedPersonas(data.personas);
+      setStep(5);
+      setShowSessions(false);
+    } catch(e) { alert("Failed to load session: " + e.message); }
   }
 
   function exportExcel() {
@@ -748,9 +796,29 @@ export default function Mode2() {
                   </div>
                 )}
               </div>
-              <div style={{ display:"flex", gap:10 }}>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
                 <button style={btn(C.gold, C.navy)} onClick={exportExcel}>↓ Export Excel</button>
-                <button style={btn(C.navy3, C.greyL, {border:`1px solid ${C.navy3}`})} onClick={() => { setStep(0); setResults({}); }}>New Session</button>
+                {savedSessions.length > 0 && (
+                  <div style={{ position:"relative" }}>
+                    <button style={btn(C.navy3, C.greyL, {border:`1px solid ${C.navy3}`})} onClick={() => setShowSessions(s=>!s)}>
+                      ↩ Previous Sessions ({savedSessions.length})
+                    </button>
+                    {showSessions && (
+                      <div style={{ position:"absolute", right:0, top:"110%", background:C.navy2, border:`1px solid ${C.navy3}`, borderRadius:8, padding:8, zIndex:100, minWidth:340, maxHeight:320, overflowY:"auto" }}>
+                        {savedSessions.map(s => (
+                          <div key={s.id} onClick={() => loadSession(s.id)}
+                            style={{ padding:"10px 14px", cursor:"pointer", borderRadius:6, fontSize:12, fontFamily:"Calibri,sans-serif", color:C.greyL, borderBottom:`1px solid ${C.navy3}` }}
+                            onMouseOver={e=>e.currentTarget.style.background=C.navy3}
+                            onMouseOut={e=>e.currentTarget.style.background="none"}>
+                            <div style={{ fontWeight:600, color:C.white, marginBottom:2 }}>{s.label}</div>
+                            <div style={{ fontSize:11, color:C.grey }}>{s.id}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button style={btn(C.navy3, C.greyL, {border:`1px solid ${C.navy3}`})} onClick={() => { setStep(0); setResults({}); setShowSessions(false); }}>New Session</button>
               </div>
             </div>
 

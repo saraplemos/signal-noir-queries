@@ -351,12 +351,55 @@ export default function Mode2() {
       });
     });
 
+    // Sheet 3: URLs by Publication — for each cited publication, list every URL found
+    // in query results where that publication was cited, matched by domain
+    const buildDomain = pub => {
+      const key = pub.toLowerCase().replace(/[*]/g,'').trim();
+      const base = PUB_URLS[key] || Object.entries(PUB_URLS).find(([k]) => key.includes(k) || k.includes(key))?.[1];
+      try { return base ? new URL(base).hostname.replace(/^www\./,'') : null; } catch { return null; }
+    };
+    const urlHeader = row([cell('Publication'), cell('URL'), cell('Query'), cell('Platform'), cell('Persona')]);
+    const urlRows = [urlHeader];
+    // Collect unique pub+url combinations to avoid duplicates
+    const seen = new Set();
+    // Sort pubs so they group together
+    pubs.forEach(pub => {
+      const domain = buildDomain(pub);
+      activePers.forEach(persona => {
+        activePlats.forEach(platform => {
+          const qrs = results[persona.id]?.[platform]?.queryResults || [];
+          qrs.forEach(qr => {
+            if (!(qr.cited || []).includes(pub)) return;
+            const allUrls = (qr.sources || '').match(/https?:\/\/[^\s)>,;\]"]+/g) || [];
+            const clean = u => u.replace(/[.,;)"]+$/, '');
+            // Prefer URLs matching this publication's domain; fall back to all URLs if none match
+            const matched = domain ? allUrls.filter(u => u.toLowerCase().includes(domain)) : [];
+            const toAdd = matched.length ? matched : allUrls;
+            toAdd.forEach(rawUrl => {
+              const u = clean(rawUrl);
+              const key = `${pub}||${u}`;
+              if (seen.has(key)) return;
+              seen.add(key);
+              urlRows.push(row([
+                cell(pub),
+                cell(u),
+                cell(qr.query),
+                cell(platform),
+                cell(`${persona.icon} ${persona.name}`),
+              ]));
+            });
+          });
+        });
+      });
+    });
+
     const xml = [
       '<?xml version="1.0"?>',
       '<?mso-application progid="Excel.Sheet"?>',
       '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
       sheet('Publications', pubRows),
       sheet('By Query', qRows),
+      sheet('URLs by Publication', urlRows),
       '</Workbook>',
     ].join('\n');
 

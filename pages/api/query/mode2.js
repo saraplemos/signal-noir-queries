@@ -3,6 +3,9 @@ import { MODE2_SYSTEM_PROMPT, MODE2_USER_PROMPT, parseTableResponse } from "../.
 
 const PLATFORM_CONFIGS = {
   Claude: {
+    // web_search_20250305: Anthropic's first-party web search tool.
+    // Anthropic executes searches server-side — no client tool loop needed.
+    // extractText pulls all text blocks; tool_use blocks are ignored.
     url: "https://api.anthropic.com/v1/messages",
     buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
@@ -16,23 +19,25 @@ const PLATFORM_CONFIGS = {
         max_tokens: 4096,
         temperature,
         system: systemPrompt,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{ role: "user", content: userPrompt }],
       }),
     }),
     extractText: (data) => data.content?.map(b => b.text || "").join("") || "",
   },
   ChatGPT: {
+    // gpt-4o-search-preview: OpenAI model with built-in live web search.
+    // temperature not supported on search models — omitted.
     url: "https://api.openai.com/v1/chat/completions",
-    buildRequest: (userPrompt, systemPrompt, temperature) => ({
+    buildRequest: (userPrompt, systemPrompt) => ({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o-search-preview",
         max_tokens: 4096,
-        temperature,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -42,6 +47,8 @@ const PLATFORM_CONFIGS = {
     extractText: (data) => data.choices?.[0]?.message?.content || "",
   },
   Perplexity: {
+    // sonar: Perplexity's live search model — web search on by default.
+    // return_citations: true adds native citation URLs to the response.
     url: "https://api.perplexity.ai/chat/completions",
     buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
@@ -68,6 +75,8 @@ const PLATFORM_CONFIGS = {
     },
   },
   Gemini: {
+    // google_search grounding: enables real-time Google Search results.
+    // Gemini fetches live search results and grounds its response in them.
     url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
     buildRequest: (userPrompt, systemPrompt, temperature) => ({
       method: "POST",
@@ -75,6 +84,7 @@ const PLATFORM_CONFIGS = {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        tools: [{ google_search: {} }],
         generationConfig: { maxOutputTokens: 4096, temperature },
       }),
     }),

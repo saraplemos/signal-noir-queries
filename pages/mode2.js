@@ -277,7 +277,10 @@ export default function Mode2() {
             headers: { "Content-Type":"application/json" },
             body: JSON.stringify({ platform, queries: queryTexts, publications: pubs, personaPrompt: persona.prompt, personaTemperature: persona.temperature, personaQueryFraming: persona.queryFraming }),
           });
-          const data = await res.json();
+          const rawText = await res.text();
+          let data;
+          try { data = JSON.parse(rawText); }
+          catch { data = { error: `Non-JSON response (${res.status}): ${rawText.slice(0, 200)}`, counts:{}, queryResults:[] }; }
           newResults[persona.id][platform] = data;
         } catch(e) {
           newResults[persona.id][platform] = { error: e.message, counts:{}, queryResults:[] };

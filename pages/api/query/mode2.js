@@ -136,8 +136,8 @@ export default async function handler(req, res) {
   }
 }
 
-// Allow larger payloads and longer execution for batch queries
+// Allow larger payloads for batch queries
+// maxDuration is set via vercel.json — not supported in Pages Router config export
 export const config = {
   api: { bodyParser: { sizeLimit: "2mb" }, responseLimit: false },
-  maxDuration: 300,
 };

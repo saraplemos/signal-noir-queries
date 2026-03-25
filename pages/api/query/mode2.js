@@ -136,7 +136,8 @@ export default async function handler(req, res) {
   }
 }
 
-// Allow larger payloads for batch queries
+// Allow larger payloads and longer execution for batch queries
 export const config = {
-  api: { bodyParser: { sizeLimit: "1mb" } },
+  api: { bodyParser: { sizeLimit: "2mb" }, responseLimit: false },
+  maxDuration: 300,
 };

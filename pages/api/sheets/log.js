@@ -7,7 +7,11 @@ export default async function handler(req, res) {
   const payload = await verifyToken(token);
   if (!payload) return res.status(401).json({ error: "Unauthorised" });
 
-  const { sessionId, property, destination, persona, category, query, platform, cited, sources } = req.body;
+  const {
+    sessionId, property, destination, market,
+    persona, category, query, platform,
+    citationScore, sources, runType,
+  } = req.body;
 
   try {
     await appendRow([
@@ -16,12 +20,14 @@ export default async function handler(req, res) {
       sessionId,
       property,
       destination,
+      market || "Global",
       persona,
       category,
       query,
       platform,
-      cited ? "YES" : "NO",
+      citationScore ?? 0,
       sources || "",
+      runType || "Primary",
     ]);
     res.status(200).json({ ok: true });
   } catch (e) {

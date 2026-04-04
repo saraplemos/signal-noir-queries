@@ -15,7 +15,7 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.1-sonar-large-128k-online",
+        model: "sonar-pro",
         max_tokens: 1024,
         messages: [
           {

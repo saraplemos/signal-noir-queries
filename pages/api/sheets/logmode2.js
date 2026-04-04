@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   const payload = await verifyToken(token);
   if (!payload) return res.status(401).json({ error: "Unauthorised" });
 
-  const { agency, sessionId, publications, results, platforms, runDate } = req.body;
+  const { agency, sessionId, publications, results, platforms, runDate, promptVersion } = req.body;
   // results = { Claude: {counts, queryResults}, ChatGPT: {...}, ... }
 
   const tabName = `${agency} — Signal Noir`.slice(0, 50);
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     // Write to sheet
     const allRows = [
       [`Signal Noir™ Publication Authority Report — ${agency}`],
-      [`Generated: ${runDate || new Date().toISOString()} · Tester: ${payload.name} · Session: ${sessionId}`],
+      [`Generated: ${runDate || new Date().toISOString()} · Tester: ${payload.name} · Session: ${sessionId} · Prompt: ${promptVersion || 'v2-organic'} · Publications in prompt: ${promptVersion === 'v1-guided' ? 'YES' : 'NO'}`],
       [],
       headers,
       ...rows,

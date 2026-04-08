@@ -148,7 +148,6 @@ export default function Dashboard() {
   const [showClients, setShowClients] = useState(false);
   const [clients, setClients] = useState([]);
   const [expandedComp, setExpandedComp] = useState({ 1: true, 2: true });
-  const [selectedPlatforms, setSelectedPlatforms] = useState(["Claude", "ChatGPT", "Perplexity", "Gemini"]);
   const runningRef = useRef(false);
   const runModeRef = useRef("primary");
 

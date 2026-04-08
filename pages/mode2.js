@@ -46,18 +46,18 @@ const DEFAULT_QUERIES = {
     { id:"e2",  text:"Private Vatican tour", active:true },
     { id:"e3",  text:"Private cooking class with local chef", active:true },
     { id:"e4",  text:"Wellness retreat", active:true },
-   { id:"e5",  text:"Luxury spa hotel UK", active:true },
+    { id:"e5",  text:"Luxury spa hotel UK", active:true },
     { id:"e6",  text:"Antarctic expedition cruise", active:true },
     { id:"e7",  text:"Northern lights private charter", active:true },
     { id:"e8",  text:"Heli-skiing British Columbia", active:true },
-    { id:"e9",  text:"Venice Simplon Orient Express", active:true },
+    { id:"e9",  text:"Luxury train journey Europe", active:true },
     { id:"e10", text:"Private safari lodge Botswana", active:true },
   ],
   planning: [
     { id:"p1", text:"Villa with chef and staff Tuscany", active:true },
     { id:"p2", text:"Ski chalet with catering Verbier", active:true },
     { id:"p3", text:"Yacht charter with crew Mediterranean", active:true },
- { id:"p4", text:"Luxury country house hotel UK", active:true },
+    { id:"p4", text:"Luxury country house hotel UK", active:true },
     { id:"p5", text:"Multi-generational villa rental", active:true },
     { id:"p6", text:"Family estate rental", active:true },
     { id:"p7", text:"Bespoke tour operators Antarctica", active:true },
@@ -154,7 +154,6 @@ const PUB_URLS = {
   "the blend journal": "https://theblendjournal.com",
   "blend journal": "https://theblendjournal.com",
   "business traveller": "https://www.businesstraveller.com",
-  "robb report": "https://robbreport.com",
   "travel + leisure": "https://www.travelandleisure.com",
   "travel and leisure": "https://www.travelandleisure.com",
   "town & country": "https://www.townandcountrymag.com",
@@ -402,8 +401,7 @@ export default function Mode2() {
       });
     });
 
-    // Sheet 3: URLs by Publication — for each cited publication, list every URL found
-    // in query results where that publication was cited, matched by domain
+    // Sheet 3: URLs by Publication
     const buildDomain = pub => {
       const key = pub.toLowerCase().replace(/[*]/g,'').trim();
       const base = PUB_URLS[key] || Object.entries(PUB_URLS).find(([k]) => key.includes(k) || k.includes(key))?.[1];
@@ -411,9 +409,7 @@ export default function Mode2() {
     };
     const urlHeader = row([cell('Publication'), cell('URL'), cell('Query'), cell('Platform'), cell('Persona')]);
     const urlRows = [urlHeader];
-    // Collect unique pub+url combinations to avoid duplicates
     const seen = new Set();
-    // Sort pubs so they group together
     pubs.forEach(pub => {
       const domain = buildDomain(pub);
       activePers.forEach(persona => {
@@ -423,7 +419,6 @@ export default function Mode2() {
             if (!(qr.cited || []).includes(pub)) return;
             const allUrls = (qr.sources || '').match(/https?:\/\/[^\s)>,;\]"]+/g) || [];
             const clean = u => u.replace(/[.,;)"]+$/, '');
-            // Prefer URLs matching this publication's domain; fall back to all URLs if none match
             const matched = domain ? allUrls.filter(u => u.toLowerCase().includes(domain)) : [];
             const toAdd = matched.length ? matched : allUrls;
             toAdd.forEach(rawUrl => {
@@ -926,7 +921,6 @@ export default function Mode2() {
               <div style={{ ...card({marginBottom:24}), border:`1px solid #e0525244` }}>
                 <div style={{ fontSize:12, fontWeight:700, color:"#e05252", marginBottom:12 }}>⚠ Platform Diagnostics — platforms with 0 citations</div>
                 {activePlats.filter(p => pubs.reduce((sum, pub) => sum + getCount(pub, p), 0) === 0).map(p => {
-                  // grab first persona's response for this platform
                   const firstPersona = activePers[0];
                   const d = results[firstPersona?.id]?.[p];
                   return (
@@ -972,9 +966,9 @@ export default function Mode2() {
                 </div>
               ) : null;
             })()}
+
             {/* Per-query source breakdown */}
             {(() => {
-              // Collect all queries that ran, with all sources cited across all personas & platforms
               const queryMap = {};
               activePers.forEach(persona => {
                 activePlats.forEach(platform => {
